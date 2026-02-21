@@ -2,9 +2,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createTrip, addActivities, generateItinerary, type ActivityInput } from "@/api/client";
+import PlacePicker from "@/components/PlacePicker";
 
 interface LocalActivity {
   name: string;
+  lat: number;
+  lng: number;
   durationMin: number;
   locked: boolean;
 }
@@ -15,19 +18,12 @@ export default function HomePage() {
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("18:00");
-  const [activityName, setActivityName] = useState("");
-  const [activityDuration, setActivityDuration] = useState(60);
-  const [activityLocked, setActivityLocked] = useState(false);
   const [activities, setActivities] = useState<LocalActivity[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function handleAddActivity() {
-    if (!activityName.trim()) return;
-    setActivities((prev) => [...prev, { name: activityName.trim(), durationMin: activityDuration, locked: activityLocked }]);
-    setActivityName("");
-    setActivityDuration(60);
-    setActivityLocked(false);
+  function handleAddPlace(place: { name: string; lat: number; lng: number; durationMin: number; locked: boolean }) {
+    setActivities((prev) => [...prev, place]);
   }
 
   function handleRemoveActivity(index: number) {
@@ -50,7 +46,7 @@ export default function HomePage() {
     try {
       const { tripId } = await createTrip({ city: city.trim(), date, startTime, endTime, preferences: {} });
       const activityPayload: ActivityInput[] = activities.map((a) => ({
-        place: { name: a.name, lat: 0, lng: 0 },
+        place: { name: a.name, lat: a.lat, lng: a.lng },
         durationMin: a.durationMin,
         locked: a.locked,
       }));
@@ -91,28 +87,17 @@ export default function HomePage() {
       </section>
 
       <section className="mb-8 space-y-4">
-        <h2 className="text-lg font-semibold">Activities</h2>
-        <div className="flex items-end gap-3">
-          <div className="flex-1">
-            <label className="mb-1 block text-sm font-medium">Place Name</label>
-            <input type="text" value={activityName} onChange={(e) => setActivityName(e.target.value)} placeholder="e.g. Eiffel Tower" className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
-          </div>
-          <div className="w-28">
-            <label className="mb-1 block text-sm font-medium">Duration (min)</label>
-            <input type="number" min={1} value={activityDuration} onChange={(e) => setActivityDuration(Number(e.target.value))} className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
-          </div>
-          <div className="flex items-center gap-1 pb-1">
-            <input id="locked" type="checkbox" checked={activityLocked} onChange={(e) => setActivityLocked(e.target.checked)} className="h-4 w-4" />
-            <label htmlFor="locked" className="text-sm">Lock</label>
-          </div>
-          <button type="button" onClick={handleAddActivity} className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Add</button>
-        </div>
+        <h2 className="text-lg font-semibold">Search Places</h2>
+        <PlacePicker onAddPlace={handleAddPlace} />
 
         {activities.length > 0 && (
           <ul className="space-y-2">
             {activities.map((a, idx) => (
               <li key={idx} className="flex items-center justify-between rounded border border-gray-200 px-3 py-2 text-sm">
-                <span>{a.name} — {a.durationMin} min {a.locked && <span className="ml-2 text-xs text-amber-600 font-medium">LOCKED</span>}</span>
+                <span>
+                  {a.name} — {a.durationMin} min {a.locked && <span className="ml-2 text-xs text-amber-600 font-medium">LOCKED</span>}
+                  <span className="ml-2 text-xs text-gray-400">({a.lat.toFixed(4)}, {a.lng.toFixed(4)})</span>
+                </span>
                 <button type="button" onClick={() => handleRemoveActivity(idx)} className="text-red-500 hover:text-red-700 text-xs">Remove</button>
               </li>
             ))}
