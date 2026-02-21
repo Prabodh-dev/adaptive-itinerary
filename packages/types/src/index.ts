@@ -1,24 +1,42 @@
-export type LatLng = { lat: number; lng: number };
+// Export all Zod schemas
+export {
+  LatLngSchema,
+  PlaceSchema,
+  TripPreferencesSchema,
+  CreateTripRequestSchema,
+  CreateTripResponseSchema,
+  TripSchema,
+  ActivityInputSchema,
+  ActivitySchema,
+  AddActivitiesRequestSchema,
+  AddActivitiesResponseSchema,
+  ItineraryItemSchema,
+  ItinerarySchema,
+  GenerateItineraryRequestSchema,
+  GenerateItineraryResponseSchema,
+  GetTripResponseSchema,
+} from "./schemas.js";
 
-export type Place = {
-  provider: string;
-  providerPlaceId: string;
-  name: string;
-  lat: number;
-  lng: number;
-  category?: string;
-  isIndoor?: boolean;
-  address?: string;
-};
+// Export all inferred TypeScript types
+export type {
+  LatLng,
+  Place,
+  TripPreferences,
+  CreateTripRequest,
+  CreateTripResponse,
+  Trip,
+  ActivityInput,
+  Activity,
+  AddActivitiesRequest,
+  AddActivitiesResponse,
+  ItineraryItem,
+  Itinerary,
+  GenerateItineraryRequest,
+  GenerateItineraryResponse,
+  GetTripResponse,
+} from "./schemas.js";
 
-export type ItineraryItem = {
-  activityId: string;
-  placeName: string;
-  startTime: string; // HH:mm
-  endTime: string; // HH:mm
-  travelFromPrevMin: number;
-};
-
+// Legacy types (for future phases)
 export type Signals = {
   weather: { summary: string; riskHours: string[] };
   crowds: { placeId: string; busyNow: number; peakHours: string[] }[];
