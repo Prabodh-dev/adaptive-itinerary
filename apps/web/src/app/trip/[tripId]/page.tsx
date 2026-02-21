@@ -1,9 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { getTrip, type GetTripResponse } from "@/api/client";
 import Timeline from "@/components/Timeline";
 import MapView from "@/components/MapView";
+import SignalsPanel from "@/components/SignalsPanel";
+import SuggestionCard from "@/components/SuggestionCard";
+import { useTripStream } from "@/hooks/useTripStream";
 
 export default function TripDashboardPage() {
   const params = useParams<{ tripId: string }>();
@@ -11,6 +14,28 @@ export default function TripDashboardPage() {
   const [data, setData] = useState<GetTripResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const refreshTrip = useCallback(() => {
+    if (!tripId) return;
+    getTrip(tripId)
+      .then(setData)
+      .catch((err) => console.error("Failed to refresh trip:", err));
+  }, [tripId]);
+
+  useTripStream({
+    tripId: tripId as string,
+    onSignalUpdate: () => {
+      console.log("Signal update received via SSE");
+    },
+    onSuggestionNew: () => {
+      console.log("New suggestion received via SSE");
+    },
+    onItineraryVersion: () => {
+      console.log("Itinerary version update received via SSE");
+      refreshTrip();
+    },
+  });
 
   useEffect(() => {
     if (!tripId) return;
@@ -19,7 +44,7 @@ export default function TripDashboardPage() {
       .then(setData)
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load trip."))
       .finally(() => setLoading(false));
-  }, [tripId]);
+  }, [tripId, refreshKey]);
 
   if (loading) return <main className="mx-auto max-w-2xl px-4 py-10"><p className="text-gray-500">Loading trip...</p></main>;
   if (error) return <main className="mx-auto max-w-2xl px-4 py-10"><p className="text-red-600">{error}</p></main>;
@@ -44,6 +69,18 @@ export default function TripDashboardPage() {
           {endStr && (<><dt className="font-medium text-gray-500">End</dt><dd>{endStr}</dd></>)}
         </dl>
       </section>
+
+      {tripId && (
+        <section className="mb-8">
+          <SignalsPanel tripId={tripId as string} />
+        </section>
+      )}
+
+      {tripId && (
+        <section className="mb-8">
+          <SuggestionCard tripId={tripId as string} onSuggestionApplied={refreshTrip} />
+        </section>
+      )}
 
       {data.activities && data.activities.length > 0 && (
         <section className="mb-8">
