@@ -23,6 +23,8 @@ export default function TripDashboardPage() {
       .catch((err) => console.error("Failed to refresh trip:", err));
   }, [tripId]);
 
+  const [suggestionsKey, setSuggestionsKey] = useState(0);
+
   useTripStream({
     tripId: tripId as string,
     onSignalUpdate: () => {
@@ -30,6 +32,7 @@ export default function TripDashboardPage() {
     },
     onSuggestionNew: () => {
       console.log("New suggestion received via SSE");
+      setSuggestionsKey(k => k + 1);
     },
     onItineraryVersion: () => {
       console.log("Itinerary version update received via SSE");
@@ -78,7 +81,7 @@ export default function TripDashboardPage() {
 
       {tripId && (
         <section className="mb-8">
-          <SuggestionCard tripId={tripId as string} onSuggestionApplied={refreshTrip} />
+          <SuggestionCard key={suggestionsKey} tripId={tripId as string} onSuggestionApplied={refreshTrip} />
         </section>
       )}
 

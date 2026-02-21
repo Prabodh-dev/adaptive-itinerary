@@ -31,11 +31,12 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
   const [signals, setSignals] = useState<SignalsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pollingStopped, setPollingStopped] = useState(false);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
     let pollCount = 0;
-    const maxPolls = 12; // Stop after 12 polls (60 seconds)
+    const maxPolls = 24; // Stop after 2 minutes (24 polls * 5 seconds)
     
     async function fetchSignals() {
       try {
@@ -48,10 +49,14 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
         const hasCrowdsResponse = data.crowds !== undefined;
         const hasTransitResponse = data.transit !== undefined;
         
-        // Clear existing interval
-        if (intervalId) {
-          clearInterval(intervalId);
-          intervalId = null;
+        // If we have all data, stop polling
+        if (hasWeatherResponse && hasCrowdsResponse && hasTransitResponse) {
+          setPollingStopped(true);
+          if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+          }
+          return;
         }
         
         // If still waiting for initial responses, poll every 5 seconds
@@ -68,6 +73,7 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
               const nowHasTransitResponse = newData.transit !== undefined;
               
               if ((nowHasWeatherResponse && nowHasCrowdsResponse && nowHasTransitResponse) || pollCount >= maxPolls) {
+                setPollingStopped(true);
                 if (intervalId) {
                   clearInterval(intervalId);
                   intervalId = null;
@@ -75,12 +81,19 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
               }
             } catch (err) {
               console.error("Error polling signals:", err);
+              // On error, also stop polling and show what we have
+              setPollingStopped(true);
+              if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+              }
             }
           }, 5000); // Poll every 5 seconds
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load signals");
         setLoading(false);
+        setPollingStopped(true);
       }
     }
 
@@ -114,9 +127,11 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
   const hasWeather = weather && weather.summary && weather.summary !== "No data yet";
   const hasCrowds = crowds && crowds.length > 0;
   const hasTransit = transit && transit.alerts && transit.alerts.length > 0;
-  const isLoadingWeather = !weather || !weather.summary || weather.summary === "No data yet";
-  const isLoadingCrowds = crowds === undefined; // Only loading if undefined, not if empty array
-  const isLoadingTransit = transit === undefined; // Only loading if undefined, not if empty alerts
+  
+  // Show loading only if polling hasn't stopped AND data is missing
+  const isLoadingWeather = !pollingStopped && (!weather || !weather.summary || weather.summary === "No data yet");
+  const isLoadingCrowds = !pollingStopped && crowds === undefined;
+  const isLoadingTransit = !pollingStopped && transit === undefined;
 
   return (
     <div className="space-y-4">
@@ -230,6 +245,11 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <h3 className="mb-3 text-lg font-semibold">Transit Alerts</h3>
           <p className="text-sm text-green-600">✓ No transit delays detected nearby.</p>
+        </div>
+      ) : pollingStopped && !transit ? (
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <h3 className="mb-3 text-lg font-semibold">Transit Alerts</h3>
+          <p className="text-sm text-gray-500">No transit data available for this location.</p>
         </div>
       ) : null}
 

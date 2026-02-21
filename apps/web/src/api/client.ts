@@ -1,10 +1,17 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8080";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  const fetchOptions: RequestInit = { ...options };
+  
+  // Only set Content-Type if there's a body
+  if (options?.body) {
+    fetchOptions.headers = {
+      ...fetchOptions.headers,
+      "Content-Type": "application/json",
+    };
+  }
+  
+  const res = await fetch(`${API_BASE}${path}`, fetchOptions);
   if (!res.ok) {
     const text = await res.text().catch(() => "Unknown error");
     throw new Error(`API ${res.status}: ${text}`);
@@ -73,6 +80,8 @@ export interface PlaceSearchRequest {
   near: { lat: number; lng: number };
   radiusKm?: number;
   limit?: number;
+  interests?: string[];
+  avoid?: string[];
 }
 
 export interface PlaceSearchResponse {
@@ -109,11 +118,13 @@ export async function searchPlaces(
   query: string,
   near: { lat: number; lng: number },
   radiusKm: number = 5,
-  limit: number = 10
+  limit: number = 10,
+  interests: string[] = [],
+  avoid: string[] = []
 ): Promise<PlaceSearchResponse> {
   return request<PlaceSearchResponse>("/places/search", {
     method: "POST",
-    body: JSON.stringify({ query, near, radiusKm, limit }),
+    body: JSON.stringify({ query, near, radiusKm, limit, interests, avoid }),
   });
 }
 

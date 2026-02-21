@@ -119,9 +119,11 @@ export const GetTripResponseSchema = z.object({
 export const PlacesSearchRequestSchema = z.object({
   query: z.string().min(1),
   near: LatLngSchema,
-  radiusKm: z.number().positive().optional(), // Optional - let API or client decide
+  radiusKm: z.number().positive().optional(),
   categories: z.array(z.string()).optional(),
-  limit: z.number().int().positive().max(50).optional(), // Optional - let API or client decide
+  limit: z.number().int().positive().max(50).optional(),
+  interests: z.array(z.string()).optional(), // e.g. ["history", "art", "food", "nature"]
+  avoid: z.array(z.string()).optional(),      // e.g. ["no-food", "no-nature"]
 });
 
 export const PlacesSearchResponseSchema = z.object({
@@ -178,8 +180,8 @@ export const UpsertTransitSignalRequestSchema = z.object({
 
 export const SignalsResponseSchema = z.object({
   weather: SignalWeatherSchema,
-  crowds: z.array(CrowdSignalItemSchema),
-  transit: TransitSignalSchema,
+  crowds: z.array(CrowdSignalItemSchema).optional(),
+  transit: TransitSignalSchema.optional(),
 });
 
 // ===== Suggestion Schemas =====

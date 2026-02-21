@@ -11,7 +11,6 @@ import { registerSuggestionsRoutes } from "./routes/suggestions.routes.js";
 import { registerStreamRoutes } from "./routes/stream.routes.js";
 
 const PORT = parseInt(process.env.PORT || "8080", 10);
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
 
 async function start() {
   const app = Fastify({

@@ -14,6 +14,40 @@ import type {
 import type { WeatherSignalRecord, CrowdSignalRecord, TransitSignalRecord } from "../store/store.js";
 import { buildPlanDiff } from "./diff.service.js";
 import { computeImpact, computeConfidence } from "./impact.service.js";
+import { parseHHMM, formatHHMM } from "../utils/time.js";
+
+/**
+ * Recalculate itinerary times after reordering
+ * Note: travel times need to be recalculated separately using Mapbox
+ */
+function recalculateItineraryTimes(
+  items: ItineraryItem[],
+  tripStartTime: string
+): ItineraryItem[] {
+  const tripStartMin = parseHHMM(tripStartTime);
+  const recalculated: ItineraryItem[] = [];
+  let currentTimeMin = tripStartMin;
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    // First item always starts at trip start time
+    const travelFromPrevMin = i === 0 ? 0 : Math.max(item.travelFromPrevMin, 5);
+    const startTime = currentTimeMin + travelFromPrevMin;
+    const duration = parseHHMM(item.endTime) - parseHHMM(item.startTime);
+    const endTime = startTime + duration;
+
+    recalculated.push({
+      ...item,
+      startTime: formatHHMM(startTime),
+      endTime: formatHHMM(endTime),
+      travelFromPrevMin,
+    });
+
+    currentTimeMin = endTime;
+  }
+
+  return recalculated;
+}
 
 /**
  * Check if a time falls within risk hours
@@ -118,7 +152,7 @@ function reorderToAvoidRain(
  * Returns null if no suggestion needed
  */
 export function buildWeatherSuggestion(
-  _trip: Trip,
+  trip: Trip,
   activities: Activity[],
   latestItinerary: Itinerary | undefined,
   weatherSignal: WeatherSignalRecord | null
@@ -166,7 +200,19 @@ export function buildWeatherSuggestion(
   ];
 
   // Reorder itinerary (respecting locked activities)
-  const afterPlanItems = reorderToAvoidRain(latestItinerary.items, riskyActivities, lockedIds);
+  const reorderedItems = reorderToAvoidRain(latestItinerary.items, riskyActivities, lockedIds);
+
+  // Check if there's actually a change - if not, don't create suggestion
+  const hasActualChange = reorderedItems.some((item, idx) => 
+    item.activityId !== latestItinerary.items[idx]?.activityId
+  );
+  if (!hasActualChange) {
+    console.log("[Suggestion] Weather: No actual reordering needed, skipping suggestion");
+    return null;
+  }
+
+  // Recalculate times based on new order
+  const afterPlanItems = recalculateItineraryTimes(reorderedItems, trip.startTime);
 
   // Get current version from latestItinerary
   const currentVersion = latestItinerary.totalTravelMin ? 1 : 1;
@@ -323,7 +369,7 @@ function reorderToAvoidCrowds(
  * Returns null if no suggestion needed
  */
 export function buildCrowdSuggestion(
-  _trip: Trip,
+  trip: Trip,
   activities: Activity[],
   latestItinerary: Itinerary | undefined,
   crowdSignalRecord: CrowdSignalRecord | null
@@ -378,7 +424,19 @@ export function buildCrowdSuggestion(
   reasons.push("Shifted crowded stops earlier to avoid peak hours");
 
   // Reorder itinerary (respecting locked activities)
-  const afterPlanItems = reorderToAvoidCrowds(latestItinerary.items, crowdedActivities, lockedIds);
+  const reorderedItems = reorderToAvoidCrowds(latestItinerary.items, crowdedActivities, lockedIds);
+
+  // Check if there's actually a change - if not, don't create suggestion
+  const hasActualChange = reorderedItems.some((item, idx) => 
+    item.activityId !== latestItinerary.items[idx]?.activityId
+  );
+  if (!hasActualChange) {
+    console.log("[Suggestion] Crowd: No actual reordering needed, skipping suggestion");
+    return null;
+  }
+
+  // Recalculate times based on new order
+  const afterPlanItems = recalculateItineraryTimes(reorderedItems, trip.startTime);
 
   // Compute diff, impact, and confidence
   const diff = buildPlanDiff(latestItinerary.items, afterPlanItems);
@@ -421,7 +479,7 @@ export function buildCrowdSuggestion(
  * Returns null if no suggestion needed
  */
 export function buildTransitSuggestion(
-  _trip: Trip,
+  trip: Trip,
   activities: Activity[],
   latestItinerary: Itinerary | undefined,
   transitSignal: TransitSignalRecord | null
@@ -466,7 +524,6 @@ export function buildTransitSuggestion(
 
   // Simple reorder strategy: move first 1-2 non-locked items later
   // This gives more buffer time if user is starting their trip
-  const afterPlanItems: ItineraryItem[] = [];
   const itemsToShift: ItineraryItem[] = [];
   const restItems: ItineraryItem[] = [];
 
@@ -487,7 +544,20 @@ export function buildTransitSuggestion(
   }
 
   // New order: rest items first, then shifted items (gives buffer at start)
-  afterPlanItems.push(...restItems, ...itemsToShift);
+  const reorderedItems: ItineraryItem[] = [];
+  reorderedItems.push(...restItems, ...itemsToShift);
+
+  // Check if there's actually a change - if not, don't create suggestion
+  const hasActualChange = reorderedItems.some((item, idx) => 
+    item.activityId !== latestItinerary.items[idx]?.activityId
+  );
+  if (!hasActualChange) {
+    console.log("[Suggestion] Transit: No actual reordering needed, skipping suggestion");
+    return null;
+  }
+
+  // Recalculate times based on new order
+  const afterPlanItems = recalculateItineraryTimes(reorderedItems, trip.startTime);
 
   const suggestionId = `sug_${nanoid(10)}`;
 

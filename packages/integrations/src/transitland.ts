@@ -76,7 +76,9 @@ export async function transitlandFindStopsNear(params: {
       );
     }
 
-    const data = await response.json();
+    const data = await response.json() as {
+      stops?: Array<{ onestop_id?: string; id?: string; stop_id?: string; stop_name?: string; name?: string }>;
+    };
     
     // Parse stops from response
     const stops: TransitlandStop[] = [];

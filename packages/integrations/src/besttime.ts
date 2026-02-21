@@ -78,7 +78,11 @@ export async function besttimeNewForecast(
       return { venueId: null, analysis: null, raw: null };
     }
 
-    const data = await response.json();
+    const data = await response.json() as {
+      venue_info?: { venue_id?: string };
+      venue_id?: string;
+      analysis?: any;
+    };
 
     // Extract venue_id
     const venueId = data?.venue_info?.venue_id || data?.venue_id || null;
@@ -200,11 +204,13 @@ async function tryLiveEndpoint(
       };
     }
 
-    const data = await response.json();
+    const data = await response.json() as {
+      analysis?: { venue_live_busyness?: number; venue_forecasted_busyness?: number; hour_start?: number };
+      venue_info?: Record<string, unknown>;
+    };
 
     // Parse live data
     const analysis = data?.analysis || {};
-    const venueInfo = data?.venue_info || {};
 
     // Live busyness (may exceed 100)
     const liveBusyness =

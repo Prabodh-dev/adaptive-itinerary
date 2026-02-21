@@ -6,6 +6,7 @@ import type { TripRecord, ActivityRecord } from "../store/store.js";
 import { parseHHMM, formatHHMM } from "../utils/time.js";
 import { haversineKm, estimateTravelMin } from "../utils/geo.js";
 import { getDurationMatrixMapbox, getMapboxProfile } from "@adaptive/integrations";
+import { shouldAvoidCategory, resolveAvoidKeywords } from "../utils/categories.js";
 
 export interface GenerateItineraryParams {
   trip: TripRecord;
@@ -28,20 +29,44 @@ export async function generateItinerary(
     return { items: [], totalTravelMin: 0 };
   }
 
+  // Get avoid preferences from trip
+  const avoid = trip.preferences?.avoid || [];
+  
+  // Resolve simple keywords like "history" to "no-museums"
+  const resolvedAvoid = resolveAvoidKeywords(avoid);
+
+  // Filter out activities with avoided categories
+  let filteredActivities = activities;
+  if (resolvedAvoid.length > 0) {
+    filteredActivities = activities.filter(activity => {
+      const category = activity.place.category;
+      return !shouldAvoidCategory(category, resolvedAvoid);
+    });
+    
+    if (filteredActivities.length === 0) {
+      console.log("[Planner] All activities filtered out due to avoid preferences");
+      return { items: [], totalTravelMin: 0 };
+    }
+    
+    if (filteredActivities.length < activities.length) {
+      console.log(`[Planner] Filtered out ${activities.length - filteredActivities.length} activities due to avoid preferences`);
+    }
+  }
+
   const tripStartMin = parseHHMM(trip.startTime);
   const tripEndMin = parseHHMM(trip.endTime);
 
   // Determine if we should optimize and if we have necessary API credentials
   const mapboxToken = process.env.MAPBOX_ACCESS_TOKEN || "";
-  const shouldOptimize = optimizeOrder && mapboxToken && activities.length > 1;
+  const shouldOptimize = optimizeOrder && mapboxToken && filteredActivities.length > 1;
 
-  let orderedActivities = activities;
+  let orderedActivities = filteredActivities;
   let durationMatrix: number[][] | null = null;
 
   if (shouldOptimize) {
     try {
       // Build duration matrix using Mapbox
-      const coordinates = buildCoordinateList(activities, startLocation);
+      const coordinates = buildCoordinateList(filteredActivities, startLocation);
       
       // Choose profile based on mode
       const trafficProfile = process.env.MAPBOX_TRAFFIC_PROFILE || "mapbox/driving-traffic";

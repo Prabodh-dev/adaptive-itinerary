@@ -25,8 +25,6 @@ export default function HomePage() {
   const [endTime, setEndTime] = useState("");
   const [pace, setPace] = useState<"slow" | "medium" | "fast" | "">("");
   const [budget, setBudget] = useState<"low" | "medium" | "high" | "">("");
-  const [interests, setInterests] = useState<string>("");
-  const [avoid, setAvoid] = useState<string>("");
   const [transportMode, setTransportMode] = useState<"driving" | "walking" | "transit" | "">("");
   const [activities, setActivities] = useState<LocalActivity[]>([]);
   const [loading, setLoading] = useState(false);
@@ -78,8 +76,8 @@ export default function HomePage() {
         endTime,
         preferences: {
           pace,
-          interests: interests ? interests.split(",").map(s => s.trim()).filter(Boolean) : [],
-          avoid: avoid ? avoid.split(",").map(s => s.trim()).filter(Boolean) : [],
+          interests: [],
+          avoid: [],
           budget,
         },
       });
@@ -153,14 +151,6 @@ export default function HomePage() {
               <option value="high">High (Premium experiences)</option>
             </select>
           </div>
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium">Interests (optional)</label>
-          <input type="text" value={interests} onChange={(e) => setInterests(e.target.value)} placeholder="e.g. history, art, food, nature (comma-separated)" className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium">Avoid (optional)</label>
-          <input type="text" value={avoid} onChange={(e) => setAvoid(e.target.value)} placeholder="e.g. crowds, heights, spicy food (comma-separated)" className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">Transportation Mode *</label>

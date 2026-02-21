@@ -50,10 +50,10 @@ export async function registerSignalsRoutes(app: FastifyInstance) {
                 summary: "No data yet",
                 riskHours: [],
               },
-          crowds: crowdSignal ? crowdSignal.crowds : [],
+          crowds: crowdSignal ? crowdSignal.crowds : undefined,
           transit: transitSignal
             ? { alerts: transitSignal.alerts }
-            : { alerts: [] },
+            : undefined,
         });
 
         return reply.send(response);

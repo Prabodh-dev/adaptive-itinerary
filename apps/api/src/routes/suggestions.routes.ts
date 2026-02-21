@@ -11,9 +11,11 @@ import {
   type Suggestion,
   type FeedbackRequest,
   type Itinerary,
+  type ItineraryItem,
 } from "@adaptive/types";
 import * as store from "../store/store.js";
 import * as sseHub from "../realtime/sseHub.js";
+import { parseHHMM, formatHHMM } from "../utils/time.js";
 
 /**
  * Register suggestions routes
@@ -173,10 +175,33 @@ export async function registerSuggestionsRoutes(app: FastifyInstance) {
           });
         }
 
-        // Create new itinerary version from afterPlan
+        // Get trip start time for recalculating
+        const tripStartMin = parseHHMM(tripData.trip.startTime);
+
+        // Recalculate times based on new order
+        const recalculatedItems: ItineraryItem[] = [];
+        let currentTimeMin = tripStartMin;
+
+        for (let i = 0; i < suggestion.afterPlan.items.length; i++) {
+          const item = suggestion.afterPlan.items[i];
+          const travelFromPrevMin = i === 0 ? 0 : item.travelFromPrevMin;
+          const startTime = currentTimeMin + travelFromPrevMin;
+          const endTime = startTime + (parseHHMM(item.endTime) - parseHHMM(item.startTime));
+
+          recalculatedItems.push({
+            ...item,
+            startTime: formatHHMM(startTime),
+            endTime: formatHHMM(endTime),
+            travelFromPrevMin,
+          });
+
+          currentTimeMin = endTime;
+        }
+
+        // Create new itinerary version from recalculated items
         const newItinerary: Itinerary = {
-          items: suggestion.afterPlan.items,
-          totalTravelMin: suggestion.afterPlan.items.reduce(
+          items: recalculatedItems,
+          totalTravelMin: recalculatedItems.reduce(
             (sum, item) => sum + item.travelFromPrevMin, 
             0
           ),

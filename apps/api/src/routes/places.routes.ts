@@ -6,6 +6,7 @@ import {
   type Place,
 } from "@adaptive/types";
 import { searchPlacesFoursquare } from "@adaptive/integrations";
+import { getCategoriesForInterests, filterPlacesByPreferences, resolveAvoidKeywords } from "../utils/categories.js";
 
 export async function registerPlacesRoutes(app: FastifyInstance) {
   // POST /places/search - Search for places
@@ -13,11 +14,20 @@ export async function registerPlacesRoutes(app: FastifyInstance) {
     try {
       // Validate request body
       const body = PlacesSearchRequestSchema.parse(req.body);
-      const { query, near, radiusKm = 10, categories, limit = 20 } = body;
+      const { query, near, radiusKm = 10, categories, limit = 20, interests = [], avoid = [] } = body;
 
       const apiKey = process.env.FOURSQUARE_API_KEY || "";
 
       let places: Place[];
+
+      // Build category filter from interests
+      const interestCategories = getCategoriesForInterests(interests);
+      const allCategories = categories && categories.length > 0 
+        ? [...categories, ...interestCategories] 
+        : interestCategories;
+
+      // Resolve avoid keywords (e.g., "history" -> "no-museums")
+      const resolvedAvoid = resolveAvoidKeywords(avoid);
 
       if (!apiKey) {
         // Return mock places if no API key is configured
@@ -29,10 +39,16 @@ export async function registerPlacesRoutes(app: FastifyInstance) {
           query,
           near,
           radiusKm,
-          categories,
+          allCategories.length > 0 ? allCategories : undefined,
           limit,
           apiKey
         );
+      }
+
+      // Filter places based on avoid preferences
+      if (resolvedAvoid.length > 0) {
+        const filtered = filterPlacesByPreferences(places, interests, resolvedAvoid);
+        places = filtered.matched;
       }
 
       const response = PlacesSearchResponseSchema.parse({ places });

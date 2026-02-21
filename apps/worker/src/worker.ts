@@ -11,12 +11,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 config({ path: resolve(__dirname, "../../../.env") });
 
-import { 
-  besttimeNewForecast, 
+import {
+  besttimeNewForecast,
   besttimeLive,
   transitlandFindStopsNear,
   transitlandGetDepartures,
-  extractTransitAlertsFromDepartures
+  extractTransitAlertsFromDepartures,
 } from "@adaptive/integrations";
 
 const API_BASE_URL = process.env.API_URL || "http://localhost:8080";
@@ -24,37 +24,35 @@ const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
 const BESTTIME_API_KEY_PRIVATE = process.env.BESTTIME_API_KEY_PRIVATE;
 const WEATHER_POLL_INTERVAL_SEC = parseInt(
   process.env.WEATHER_POLL_INTERVAL_SEC || "120",
-  10
+  10,
 );
 const CROWD_POLL_INTERVAL_SEC = parseInt(
   process.env.CROWD_POLL_INTERVAL_SEC || "300",
-  10
+  10,
 );
 const MAX_CROWD_VENUES_PER_TRIP = parseInt(
   process.env.MAX_CROWD_VENUES_PER_TRIP || "8",
-  10
+  10,
 );
 const TRANSITLAND_API_KEY = process.env.TRANSITLAND_API_KEY || "";
-const TRANSITLAND_BASE_URL = process.env.TRANSITLAND_BASE_URL || "https://transit.land/api/v2/rest";
+const TRANSITLAND_BASE_URL =
+  process.env.TRANSITLAND_BASE_URL || "https://transit.land/api/v2/rest";
 const TRANSIT_POLL_INTERVAL_SEC = parseInt(
   process.env.TRANSIT_POLL_INTERVAL_SEC || "180",
-  10
+  10,
 );
 const TRANSIT_DELAY_THRESHOLD_MIN = parseInt(
   process.env.TRANSIT_DELAY_THRESHOLD_MIN || "10",
-  10
+  10,
 );
 const TRANSIT_STOPS_RADIUS_M = parseInt(
   process.env.TRANSIT_STOPS_RADIUS_M || "800",
-  10
+  10,
 );
-const TRANSIT_MAX_STOPS = parseInt(
-  process.env.TRANSIT_MAX_STOPS || "3",
-  10
-);
+const TRANSIT_MAX_STOPS = parseInt(process.env.TRANSIT_MAX_STOPS || "3", 10);
 const TRANSIT_NEXT_SECONDS = parseInt(
   process.env.TRANSIT_NEXT_SECONDS || "3600",
-  10
+  10,
 );
 
 // ============================================================================
@@ -74,7 +72,7 @@ interface Activity {
   place: {
     name: string;
     lat: number;
-    lng: number;  // Changed from 'lon' to 'lng' to match API response
+    lng: number; // Changed from 'lon' to 'lng' to match API response
     providerPlaceId?: string;
     category?: string;
     isIndoor?: boolean;
@@ -151,13 +149,13 @@ function getDateAtMidnight(dateStr: string): Date {
 
 async function fetchWeatherForecast(
   lat: number,
-  lon: number
+  lon: number,
 ): Promise<ForecastItem[]> {
   const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_API_KEY}&units=metric`;
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(
-      `Weather API error: ${response.status} ${response.statusText}`
+      `Weather API error: ${response.status} ${response.statusText}`,
     );
   }
   const data: OpenWeatherForecastResponse = await response.json();
@@ -165,10 +163,10 @@ async function fetchWeatherForecast(
 }
 
 async function fetchLatLngForCity(
-  city: string
+  city: string,
 ): Promise<{ lat: number; lon: number }> {
   const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(
-    city
+    city,
   )}&limit=1&appid=${OPENWEATHER_API_KEY}`;
   const response = await fetch(url);
   if (!response.ok) {
@@ -185,7 +183,7 @@ async function postWeatherSignal(
   tripId: string,
   summary: string,
   riskHours: string[],
-  raw: any
+  raw: any,
 ): Promise<void> {
   const payload = {
     observedAt: new Date().toISOString(),
@@ -199,12 +197,12 @@ async function postWeatherSignal(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    }
+    },
   );
 
   if (!response.ok) {
     throw new Error(
-      `Failed to post weather signal: ${response.status} ${response.statusText}`
+      `Failed to post weather signal: ${response.status} ${response.statusText}`,
     );
   }
 }
@@ -215,12 +213,13 @@ async function triggerRecompute(tripId: string): Promise<void> {
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-    }
+      body: JSON.stringify({}),
+    },
   );
 
   if (!response.ok) {
     throw new Error(
-      `Failed to trigger recompute: ${response.status} ${response.statusText}`
+      `Failed to trigger recompute: ${response.status} ${response.statusText}`,
     );
   }
 }
@@ -236,7 +235,7 @@ async function processTripWeather(tripId: string): Promise<void> {
 
     if (hoursDiff < 0 || hoursDiff > 120) {
       console.log(
-        `[${tripId}] Trip date out of forecast window (${Math.round(hoursDiff)}h), skipping`
+        `[${tripId}] Trip date out of forecast window (${Math.round(hoursDiff)}h), skipping`,
       );
       return;
     }
@@ -256,7 +255,7 @@ async function processTripWeather(tripId: string): Promise<void> {
     const hasBadWeather = forecastDuring.some((item) => {
       const isRain =
         item.weather.some((w) =>
-          ["Rain", "Drizzle", "Thunderstorm"].includes(w.main)
+          ["Rain", "Drizzle", "Thunderstorm"].includes(w.main),
         ) && item.pop >= 0.3;
       const isHeavyRain = item.pop >= 0.7;
 
@@ -353,7 +352,7 @@ async function ensureVenueCached(
   placeId: string,
   name: string,
   address: string,
-  tripDate: string
+  tripDate: string,
 ): Promise<{ venueId: string; peakHours: string[] } | null> {
   // Check cache first
   if (venueCache.has(placeId)) {
@@ -384,7 +383,7 @@ async function ensureVenueCached(
 
   venueCache.set(placeId, cacheData);
   console.log(
-    `[Crowds] Cached venue ${name}: venueId=${forecast.venueId}, peaks=${peakHours.join(",")}`
+    `[Crowds] Cached venue ${name}: venueId=${forecast.venueId}, peaks=${peakHours.join(",")}`,
   );
 
   return cacheData;
@@ -401,7 +400,7 @@ async function postCrowdSignals(
     busyNow: number;
     peakHours: string[];
   }>,
-  raw: any
+  raw: any,
 ): Promise<void> {
   const payload = {
     observedAt: new Date().toISOString(),
@@ -415,12 +414,12 @@ async function postCrowdSignals(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    }
+    },
   );
 
   if (!response.ok) {
     throw new Error(
-      `Failed to post crowd signals: ${response.status} ${response.statusText}`
+      `Failed to post crowd signals: ${response.status} ${response.statusText}`,
     );
   }
 }
@@ -441,7 +440,7 @@ async function processTripCrowd(tripId: string): Promise<void> {
     }
 
     console.log(
-      `[Crowds][${tripId}] Fetching crowd data for ${activities.length} places (max ${MAX_CROWD_VENUES_PER_TRIP})...`
+      `[Crowds][${tripId}] Fetching crowd data for ${activities.length} places (max ${MAX_CROWD_VENUES_PER_TRIP})...`,
     );
 
     const crowds: Array<{
@@ -494,7 +493,7 @@ async function processTripCrowd(tripId: string): Promise<void> {
 
       const liveLabel = live.liveAvailable ? "live" : "forecasted";
       console.log(
-        `[Crowds][${tripId}] ${name}: ${busyNow}% (${liveLabel}), peak ${cached.peakHours.join(", ")}`
+        `[Crowds][${tripId}] ${name}: ${busyNow}% (${liveLabel}), peak ${cached.peakHours.join(", ")}`,
       );
     }
 
@@ -505,7 +504,9 @@ async function processTripCrowd(tripId: string): Promise<void> {
 
     // Post crowd signals
     await postCrowdSignals(tripId, crowds, { source: "worker-besttime" });
-    console.log(`[Crowds][${tripId}] Crowd signals posted (${crowds.length} places)`);
+    console.log(
+      `[Crowds][${tripId}] Crowd signals posted (${crowds.length} places)`,
+    );
 
     // Trigger recompute
     await triggerRecompute(tripId);
@@ -551,7 +552,9 @@ async function pollTransit(): Promise<void> {
   console.log("[Transit] Polling transit data via Transitland...");
 
   if (!TRANSITLAND_API_KEY) {
-    console.warn("[Transit] TRANSITLAND_API_KEY not set, skipping transit polling");
+    console.warn(
+      "[Transit] TRANSITLAND_API_KEY not set, skipping transit polling",
+    );
     return;
   }
 
@@ -583,16 +586,18 @@ async function pollTransit(): Promise<void> {
         if (tripData.activities && tripData.activities.length > 0) {
           const firstActivity = tripData.activities[0];
           refLat = firstActivity.place.lat;
-          refLon = firstActivity.place.lng;  // Changed from 'lon' to 'lng'
+          refLon = firstActivity.place.lng; // Changed from 'lon' to 'lng'
         }
 
         if (refLat === null || refLon === null) {
-          console.warn(`[Transit][${tripId}] No location available for transit search`);
+          console.warn(
+            `[Transit][${tripId}] No location available for transit search`,
+          );
           continue;
         }
 
         console.log(
-          `[Transit][${tripId}] Searching for stops near ${refLat.toFixed(4)}, ${refLon.toFixed(4)}`
+          `[Transit][${tripId}] Searching for stops near ${refLat.toFixed(4)}, ${refLon.toFixed(4)}`,
         );
 
         // Find nearby transit stops
@@ -615,12 +620,18 @@ async function pollTransit(): Promise<void> {
         console.log(`[Transit][${tripId}] Found ${stops.length} nearby stops`);
 
         // Collect alerts from all nearby stops
-        const allAlerts: Array<{ line: string; delayMin: number; message: string }> = [];
+        const allAlerts: Array<{
+          line: string;
+          delayMin: number;
+          message: string;
+        }> = [];
 
         for (const stop of stops) {
           try {
-            console.log(`[Transit][${tripId}] Fetching departures for stop: ${stop.stop_name}`);
-            
+            console.log(
+              `[Transit][${tripId}] Fetching departures for stop: ${stop.stop_name}`,
+            );
+
             const departuresResponse = await transitlandGetDepartures({
               stopKey: stop.stop_key,
               nextSeconds: TRANSIT_NEXT_SECONDS,
@@ -629,17 +640,26 @@ async function pollTransit(): Promise<void> {
               baseUrl: TRANSITLAND_BASE_URL,
             });
 
-            const alerts = extractTransitAlertsFromDepartures(departuresResponse);
+            const alerts =
+              extractTransitAlertsFromDepartures(departuresResponse);
             allAlerts.push(...alerts);
 
-            console.log(`[Transit][${tripId}] Extracted ${alerts.length} alerts from ${stop.stop_name}`);
+            console.log(
+              `[Transit][${tripId}] Extracted ${alerts.length} alerts from ${stop.stop_name}`,
+            );
           } catch (error) {
-            console.error(`[Transit][${tripId}] Error fetching departures for stop ${stop.stop_key}:`, error);
+            console.error(
+              `[Transit][${tripId}] Error fetching departures for stop ${stop.stop_key}:`,
+              error,
+            );
           }
         }
 
         // Merge and deduplicate alerts by line
-        const alertsByLine = new Map<string, { line: string; delayMin: number; message: string }>();
+        const alertsByLine = new Map<
+          string,
+          { line: string; delayMin: number; message: string }
+        >();
         for (const alert of allAlerts) {
           const existing = alertsByLine.get(alert.line);
           if (!existing || alert.delayMin > existing.delayMin) {
@@ -652,7 +672,9 @@ async function pollTransit(): Promise<void> {
           .sort((a, b) => b.delayMin - a.delayMin)
           .slice(0, 5);
 
-        console.log(`[Transit][${tripId}] Final: ${finalAlerts.length} unique alerts`);
+        console.log(
+          `[Transit][${tripId}] Final: ${finalAlerts.length} unique alerts`,
+        );
 
         // Post transit signals
         await postTransitSignals(tripId, finalAlerts);
@@ -664,7 +686,7 @@ async function pollTransit(): Promise<void> {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({}),
-          }
+          },
         );
 
         if (recomputeResp.ok) {
@@ -686,7 +708,7 @@ async function pollTransit(): Promise<void> {
  */
 async function postTransitSignals(
   tripId: string,
-  alerts: Array<{ line: string; delayMin: number; message: string }>
+  alerts: Array<{ line: string; delayMin: number; message: string }>,
 ): Promise<void> {
   try {
     const response = await fetch(
@@ -703,12 +725,12 @@ async function postTransitSignals(
             source: "transitland",
           },
         }),
-      }
+      },
     );
 
     if (!response.ok) {
       console.error(
-        `[Transit][${tripId}] Failed to post transit signals: ${response.status}`
+        `[Transit][${tripId}] Failed to post transit signals: ${response.status}`,
       );
       return;
     }
@@ -735,7 +757,7 @@ async function start() {
 
   // Crowd polling is optional
   const crowdEnabled = !!BESTTIME_API_KEY_PRIVATE;
-  
+
   // Transit polling is optional (enabled if API key is set)
   const transitEnabled = !!TRANSITLAND_API_KEY;
 
@@ -744,18 +766,20 @@ async function start() {
   console.log(`Crowd poll interval: ${CROWD_POLL_INTERVAL_SEC}s`);
   console.log(`Transit poll interval: ${TRANSIT_POLL_INTERVAL_SEC}s`);
   console.log(
-    `Crowd detection: ${crowdEnabled ? "✓ ENABLED (BestTime real API)" : "✗ DISABLED (BESTTIME_API_KEY_PRIVATE not set)"}`
+    `Crowd detection: ${crowdEnabled ? "✓ ENABLED (BestTime real API)" : "✗ DISABLED (BESTTIME_API_KEY_PRIVATE not set)"}`,
   );
   console.log(
-    `Transit monitoring: ${transitEnabled ? "✓ ENABLED (Transitland)" : "✗ DISABLED (TRANSITLAND_API_KEY not set)"}`
+    `Transit monitoring: ${transitEnabled ? "✓ ENABLED (Transitland)" : "✗ DISABLED (TRANSITLAND_API_KEY not set)"}`,
   );
 
   if (crowdEnabled) {
     console.log(`Max venues per trip: ${MAX_CROWD_VENUES_PER_TRIP}`);
   }
-  
+
   if (transitEnabled) {
-    console.log(`Transit delay threshold: ${TRANSIT_DELAY_THRESHOLD_MIN} minutes`);
+    console.log(
+      `Transit delay threshold: ${TRANSIT_DELAY_THRESHOLD_MIN} minutes`,
+    );
     console.log(`Transit stops search radius: ${TRANSIT_STOPS_RADIUS_M}m`);
     console.log(`Max stops per trip: ${TRANSIT_MAX_STOPS}`);
     console.log(`Transitland base URL: ${TRANSITLAND_BASE_URL}`);
@@ -766,7 +790,7 @@ async function start() {
   let apiReady = false;
   let attempts = 0;
   const maxAttempts = 30; // 30 seconds max wait
-  
+
   while (!apiReady && attempts < maxAttempts) {
     try {
       const response = await fetch(`${API_BASE_URL}/health`, {
