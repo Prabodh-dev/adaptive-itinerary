@@ -485,30 +485,34 @@ async function pollCrowds(): Promise<void> {
  */
 async function start() {
   console.log("=== Weather & Crowd Worker ===");
-  console.log(`API URL: ${API_BASE_URL}`);
-  console.log(`Weather poll interval: ${WEATHER_POLL_INTERVAL_SEC}s`);
-  console.log(`Crowd poll interval: ${CROWD_POLL_INTERVAL_SEC}s`);
-
+  
+  // Validate required API keys
   if (!OPENWEATHER_API_KEY) {
-    console.warn("WARNING: OPENWEATHER_API_KEY not set, weather polling disabled");
+    console.error("ERROR: OPENWEATHER_API_KEY is required but not set in .env");
+    console.error("Get your API key at: https://openweathermap.org/api");
+    process.exit(1);
   }
   
   if (!BESTTIME_API_KEY) {
-    console.warn("WARNING: BESTTIME_API_KEY not set, using fallback crowd data");
+    console.error("ERROR: BESTTIME_API_KEY is required but not set in .env");
+    console.error("Get your private API key at: https://besttime.app/api/v1/keys");
+    console.error("Note: You need a PRIVATE key (starts with 'pri_'), not a public key");
+    process.exit(1);
   }
 
+  console.log(`API URL: ${API_BASE_URL}`);
+  console.log(`Weather poll interval: ${WEATHER_POLL_INTERVAL_SEC}s`);
+  console.log(`Crowd poll interval: ${CROWD_POLL_INTERVAL_SEC}s`);
+  console.log("✓ All API keys configured");
+
   // Initial polls
-  if (OPENWEATHER_API_KEY) {
-    await pollWeather();
-  }
+  await pollWeather();
   await pollCrowds();
 
   // Set up intervals
-  if (OPENWEATHER_API_KEY) {
-    setInterval(async () => {
-      await pollWeather();
-    }, WEATHER_POLL_INTERVAL_SEC * 1000);
-  }
+  setInterval(async () => {
+    await pollWeather();
+  }, WEATHER_POLL_INTERVAL_SEC * 1000);
 
   setInterval(async () => {
     await pollCrowds();
