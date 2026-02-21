@@ -3,9 +3,10 @@ import type { Itinerary } from "@/api/client";
 
 interface TimelineProps {
   itinerary: Itinerary;
+  version?: number;
 }
 
-export default function Timeline({ itinerary }: TimelineProps) {
+export default function Timeline({ itinerary, version }: TimelineProps) {
   const { items, totalTravelMin } = itinerary;
 
   if (!items || items.length === 0) {
@@ -14,6 +15,9 @@ export default function Timeline({ itinerary }: TimelineProps) {
 
   return (
     <div>
+      {version !== undefined && (
+        <p className="mb-2 text-xs font-medium text-gray-500">Version {version}</p>
+      )}
       <ul className="space-y-4">
         {items.map((item, idx) => (
           <li key={item.activityId} className="relative border-l-2 border-blue-400 pl-6 pb-2">

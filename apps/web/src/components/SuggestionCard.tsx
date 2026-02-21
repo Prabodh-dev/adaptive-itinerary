@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getSuggestions, generateItinerary, type Suggestion, type ListSuggestionsResponse } from "@/api/client";
+import { getSuggestions, applySuggestion, sendFeedback, type Suggestion, type ListSuggestionsResponse } from "@/api/client";
+import DiffView from "./DiffView";
 
 interface SuggestionCardProps {
   tripId: string;
@@ -16,7 +17,7 @@ export default function SuggestionCard({ tripId, onSuggestionApplied }: Suggesti
 
   async function fetchSuggestions() {
     try {
-      const data = await getSuggestions(tripId);
+      const data = await getSuggestions(tripId, "pending");
       setSuggestions(data.suggestions || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load suggestions");
@@ -32,7 +33,8 @@ export default function SuggestionCard({ tripId, onSuggestionApplied }: Suggesti
   async function handleAccept(suggestionId: string) {
     setApplying(suggestionId);
     try {
-      await generateItinerary(tripId, "driving");
+      await applySuggestion(tripId, suggestionId);
+      await sendFeedback(tripId, suggestionId, "accept");
       await fetchSuggestions();
       onSuggestionApplied();
     } catch (err) {
@@ -43,7 +45,12 @@ export default function SuggestionCard({ tripId, onSuggestionApplied }: Suggesti
   }
 
   async function handleDismiss(suggestionId: string) {
-    setSuggestions((prev) => prev.filter((s) => s.suggestionId !== suggestionId));
+    try {
+      await sendFeedback(tripId, suggestionId, "reject");
+      setSuggestions((prev) => prev.filter((s) => s.suggestionId !== suggestionId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to dismiss suggestion");
+    }
   }
 
   if (loading) {
@@ -82,6 +89,11 @@ export default function SuggestionCard({ tripId, onSuggestionApplied }: Suggesti
             <span className="rounded bg-amber-200 px-2 py-1 text-xs font-medium text-amber-800">
               {suggestion.kind.toUpperCase()}
             </span>
+            {suggestion.trigger && (
+              <span className="rounded bg-gray-200 px-2 py-1 text-xs font-medium text-gray-600">
+                Trigger: {suggestion.trigger}
+              </span>
+            )}
           </div>
 
           {suggestion.reasons && suggestion.reasons.length > 0 && (
@@ -92,18 +104,9 @@ export default function SuggestionCard({ tripId, onSuggestionApplied }: Suggesti
             </ul>
           )}
 
-          {suggestion.benefit && Object.keys(suggestion.benefit).length > 0 && (
-            <div className="mb-3 text-sm">
-              <span className="font-medium text-gray-700">Benefit: </span>
-              {Object.entries(suggestion.benefit).map(([key, value]) => (
-                <span key={key} className="mr-2 rounded bg-green-100 px-2 py-0.5 text-green-700">
-                  {key}: {value}
-                </span>
-              ))}
-            </div>
-          )}
+          <DiffView suggestion={suggestion} />
 
-          <div className="flex gap-2">
+          <div className="mt-4 flex gap-2">
             <button
               onClick={() => handleAccept(suggestion.suggestionId)}
               disabled={applying === suggestion.suggestionId}

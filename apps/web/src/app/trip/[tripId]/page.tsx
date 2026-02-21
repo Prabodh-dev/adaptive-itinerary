@@ -95,7 +95,7 @@ export default function TripDashboardPage() {
 
       <section className="mb-8">
         <h2 className="mb-2 text-lg font-semibold">Itinerary</h2>
-        {data.latestItinerary ? <Timeline itinerary={data.latestItinerary.itinerary} /> : <p className="text-gray-500 text-sm">No itinerary generated yet.</p>}
+        {data.latestItinerary ? <Timeline itinerary={data.latestItinerary.itinerary} version={data.latestItinerary.version} /> : <p className="text-gray-500 text-sm">No itinerary generated yet.</p>}
       </section>
 
       <section>

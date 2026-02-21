@@ -20,9 +20,9 @@ async function start() {
     },
   });
 
-  // Register CORS
+  // Register CORS - allow all origins for development
   await app.register(cors, {
-    origin: CORS_ORIGIN,
+    origin: true,
     credentials: true,
   });
 
