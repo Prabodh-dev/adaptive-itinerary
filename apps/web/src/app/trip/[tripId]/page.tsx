@@ -63,10 +63,10 @@ export default function TripDashboardPage() {
 
       <section>
         <h2 className="mb-2 text-lg font-semibold">Map</h2>
-        {data.itinerary ? (
-          <MapView itinerary={data.itinerary} accessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN} />
+        {data.activities && data.activities.length > 0 ? (
+          <MapView activities={data.activities} accessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN} />
         ) : (
-          <p className="text-gray-500 text-sm">Generate an itinerary to see the map.</p>
+          <p className="text-gray-500 text-sm">Add activities to see them on the map.</p>
         )}
       </section>
     </main>

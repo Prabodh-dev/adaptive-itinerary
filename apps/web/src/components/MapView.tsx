@@ -1,18 +1,19 @@
 "use client";
-
 import { useEffect, useRef } from "react";
 import mapboxgl from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
-import type { Itinerary } from "@/api/client";
+import type { ActivityInput } from "@/api/client";
+
+mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
 interface MapViewProps {
-  itinerary: Itinerary;
+  activities: ActivityInput[];
   accessToken?: string;
 }
 
-export default function MapView({ itinerary, accessToken }: MapViewProps) {
+export default function MapView({ activities, accessToken }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const markersAdded = useRef(false);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -25,7 +26,7 @@ export default function MapView({ itinerary, accessToken }: MapViewProps) {
       container: mapContainer.current,
       style: "mapbox://styles/mapbox/streets-v12",
       center: [0, 0],
-      zoom: 10,
+      zoom: 2,
     });
 
     map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
@@ -33,46 +34,45 @@ export default function MapView({ itinerary, accessToken }: MapViewProps) {
     return () => {
       map.current?.remove();
       map.current = null;
+      markersAdded.current = false;
     };
   }, [accessToken]);
 
   useEffect(() => {
     if (!map.current || !accessToken) return;
-    if (!itinerary.items.length) return;
+    if (!activities.length) return;
 
-    const markers: mapboxgl.Marker[] = [];
+    const existingMarkers = document.querySelectorAll(".mapboxgl-marker");
+    existingMarkers.forEach((el) => el.remove());
 
-    itinerary.items.forEach((item, idx) => {
+    const validActivities = activities.filter((a) => a.place.lat !== 0 && a.place.lng !== 0);
+    
+    if (validActivities.length === 0) return;
+
+    const bounds = new mapboxgl.LngLatBounds();
+
+    validActivities.forEach((activity, idx) => {
       const el = document.createElement("div");
       el.className = "flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white shadow-lg";
       el.textContent = String(idx + 1);
 
       const marker = new mapboxgl.Marker({ element: el })
-        .setLngLat([0, 0])
-        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`<strong>${item.placeName}</strong><br>${item.startTime} - ${item.endTime}`))
+        .setLngLat([activity.place.lng, activity.place.lat])
+        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`<strong>${activity.place.name}</strong>`))
         .addTo(map.current!);
 
-      markers.push(marker);
+      bounds.extend([activity.place.lng, activity.place.lat]);
     });
 
-    if (markers.length > 0) {
-      const bounds = new mapboxgl.LngLatBounds();
-      markers.forEach((m) => {
-        const lngLat = m.getLngLat();
-        bounds.extend(lngLat);
-      });
+    if (!bounds.isEmpty()) {
       map.current.fitBounds(bounds, { padding: 50, maxZoom: 15 });
     }
-
-    return () => {
-      markers.forEach((m) => m.remove());
-    };
-  }, [itinerary, accessToken]);
+  }, [activities, accessToken]);
 
   if (!accessToken) {
     return (
-      <div className="flex h-64 w-full items-center justify-center rounded border border-gray-200 bg-gray-50 text-gray-500">
-        <p>Mapbox token not configured. Set NEXT_PUBLIC_MAPBOX_TOKEN in .env.local to enable map.</p>
+      <div className="flex h-64 w-full items-center justify-center rounded border border-gray-200 bg-gray-50 text-gray-500 text-sm text-center p-4">
+        Mapbox token not configured. Set NEXT_PUBLIC_MAPBOX_TOKEN in .env.local to enable map.
       </div>
     );
   }
