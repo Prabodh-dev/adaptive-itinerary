@@ -2,10 +2,10 @@
  * Weather and Crowd Worker - Polls weather and crowd data and updates API
  */
 import "dotenv/config";
+import { fetchCrowdData } from "@adaptive/integrations";
 
 const API_BASE_URL = process.env.API_URL || "http://localhost:8080";
 const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
-const BESTTIME_API_KEY = process.env.BESTTIME_API_KEY;
 const WEATHER_POLL_INTERVAL_SEC = parseInt(
   process.env.WEATHER_POLL_INTERVAL_SEC || "120",
   10
@@ -30,6 +30,8 @@ interface Activity {
     lat: number;
     lon: number;
     providerPlaceId?: string;
+    category?: string;
+    isIndoor?: boolean;
   };
 }
 
@@ -257,92 +259,6 @@ async function processTrip(tripId: string): Promise<void> {
 }
 
 /**
- * Fetch crowd data from BestTime-like API (with fallback)
- */
-async function fetchCrowdData(
-  name: string,
-  lat: number,
-  lng: number,
-  address?: string
-): Promise<{ busyNow: number; peakHours: string[]; raw: any }> {
-  // If no API key, use fallback
-  if (!BESTTIME_API_KEY || BESTTIME_API_KEY.trim() === "") {
-    return generateFallbackCrowdData();
-  }
-
-  try {
-    const body = {
-      api_key_private: BESTTIME_API_KEY,
-      venue_name: name,
-      venue_address: address || `${lat},${lng}`,
-    };
-
-    const response = await fetch("https://besttime.app/api/v1/forecasts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      console.warn(`BestTime API returned ${response.status}, using fallback`);
-      return generateFallbackCrowdData();
-    }
-
-    const data = await response.json();
-    return {
-      busyNow: extractBusyNow(data),
-      peakHours: extractPeakHours(data),
-      raw: data,
-    };
-  } catch (error) {
-    console.warn("Failed to fetch BestTime data, using fallback:", error);
-    return generateFallbackCrowdData();
-  }
-}
-
-function extractBusyNow(data: any): number {
-  try {
-    if (typeof data?.analysis?.venue_forecasted_busyness === "number") {
-      return Math.min(100, Math.max(0, data.analysis.venue_forecasted_busyness));
-    }
-    return Math.floor(Math.random() * 61) + 20; // 20-80
-  } catch {
-    return Math.floor(Math.random() * 61) + 20;
-  }
-}
-
-function extractPeakHours(data: any): string[] {
-  try {
-    const analysis = data?.analysis;
-    if (!Array.isArray(analysis?.hour_analysis)) {
-      return ["17:00", "18:00"];
-    }
-
-    const currentDay = new Date().getDay();
-    const peakHours: string[] = [];
-
-    for (const hourData of analysis.hour_analysis) {
-      if (hourData.day_int === currentDay && (hourData.intensity_nr || 0) >= 75) {
-        const hour = String(hourData.hour).padStart(2, "0");
-        peakHours.push(`${hour}:00`);
-      }
-    }
-
-    return peakHours.length > 0 ? peakHours : ["17:00", "18:00"];
-  } catch {
-    return ["17:00", "18:00"];
-  }
-}
-
-function generateFallbackCrowdData(): { busyNow: number; peakHours: string[]; raw: any } {
-  return {
-    busyNow: Math.floor(Math.random() * 61) + 20, // 20-80
-    peakHours: ["17:00", "18:00"],
-    raw: { fallback: true },
-  };
-}
-
-/**
  * Post crowd signals to API
  */
 async function postCrowdSignals(
@@ -405,12 +321,13 @@ async function processTripCrowds(tripId: string): Promise<void> {
     const limitedActivities = activities.slice(0, 8);
 
     for (const activity of limitedActivities) {
-      const { busyNow, peakHours } = await fetchCrowdData(
-        activity.place.name,
-        activity.place.lat,
-        activity.place.lon,
-        undefined
-      );
+      const { busyNow, peakHours } = await fetchCrowdData({
+        name: activity.place.name,
+        category: activity.place.category,
+        lat: activity.place.lat,
+        lng: activity.place.lon,
+        isIndoor: activity.place.isIndoor,
+      });
 
       crowds.push({
         placeId: activity.place.providerPlaceId || activity.activityId,
@@ -419,8 +336,9 @@ async function processTripCrowds(tripId: string): Promise<void> {
         peakHours,
       });
 
+      const category = activity.place.category || "unknown";
       console.log(
-        `[Crowds][${tripId}] ${activity.place.name}: ${busyNow}% busy, peak ${peakHours.join(", ")}`
+        `[Crowds][${tripId}] ${activity.place.name} (${category}): ${busyNow}% busy, peak ${peakHours.join(", ")}`
       );
     }
 
@@ -492,18 +410,11 @@ async function start() {
     console.error("Get your API key at: https://openweathermap.org/api");
     process.exit(1);
   }
-  
-  if (!BESTTIME_API_KEY) {
-    console.error("ERROR: BESTTIME_API_KEY is required but not set in .env");
-    console.error("Get your private API key at: https://besttime.app/api/v1/keys");
-    console.error("Note: You need a PRIVATE key (starts with 'pri_'), not a public key");
-    process.exit(1);
-  }
 
   console.log(`API URL: ${API_BASE_URL}`);
   console.log(`Weather poll interval: ${WEATHER_POLL_INTERVAL_SEC}s`);
   console.log(`Crowd poll interval: ${CROWD_POLL_INTERVAL_SEC}s`);
-  console.log("✓ All API keys configured");
+  console.log("✓ Using hybrid crowd detection (category-based heuristics)");
 
   // Initial polls
   await pollWeather();
