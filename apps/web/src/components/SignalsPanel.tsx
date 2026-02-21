@@ -34,6 +34,8 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
+    let pollCount = 0;
+    const maxPolls = 12; // Stop after 12 polls (60 seconds)
     
     async function fetchSignals() {
       try {
@@ -41,10 +43,10 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
         setSignals(data);
         setLoading(false);
         
-        // If data is still loading, poll frequently
-        const hasWeather = data.weather && data.weather.summary && data.weather.summary !== "No data yet";
-        const hasCrowds = data.crowds && data.crowds.length > 0;
-        const hasTransit = data.transit && data.transit.alerts && data.transit.alerts.length > 0;
+        // Check if we have responses (even if empty)
+        const hasWeatherResponse = data.weather && data.weather.summary;
+        const hasCrowdsResponse = data.crowds !== undefined;
+        const hasTransitResponse = data.transit !== undefined;
         
         // Clear existing interval
         if (intervalId) {
@@ -52,21 +54,24 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
           intervalId = null;
         }
         
-        // If still waiting for data, poll every 5 seconds
-        if (!hasWeather || !hasCrowds || !hasTransit) {
+        // If still waiting for initial responses, poll every 5 seconds
+        if (!hasWeatherResponse || !hasCrowdsResponse || !hasTransitResponse) {
           intervalId = setInterval(async () => {
             try {
+              pollCount++;
               const newData = await getSignals(tripId);
               setSignals(newData);
               
-              // Stop polling once we have all data
-              const nowHasWeather = newData.weather && newData.weather.summary && newData.weather.summary !== "No data yet";
-              const nowHasCrowds = newData.crowds && newData.crowds.length > 0;
-              const nowHasTransit = newData.transit && newData.transit.alerts && newData.transit.alerts.length > 0;
+              // Stop polling once we have all responses OR hit max polls
+              const nowHasWeatherResponse = newData.weather && newData.weather.summary;
+              const nowHasCrowdsResponse = newData.crowds !== undefined;
+              const nowHasTransitResponse = newData.transit !== undefined;
               
-              if (nowHasWeather && nowHasCrowds && nowHasTransit && intervalId) {
-                clearInterval(intervalId);
-                intervalId = null;
+              if ((nowHasWeatherResponse && nowHasCrowdsResponse && nowHasTransitResponse) || pollCount >= maxPolls) {
+                if (intervalId) {
+                  clearInterval(intervalId);
+                  intervalId = null;
+                }
               }
             } catch (err) {
               console.error("Error polling signals:", err);
@@ -110,8 +115,8 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
   const hasCrowds = crowds && crowds.length > 0;
   const hasTransit = transit && transit.alerts && transit.alerts.length > 0;
   const isLoadingWeather = !weather || !weather.summary || weather.summary === "No data yet";
-  const isLoadingCrowds = !crowds || crowds.length === 0;
-  const isLoadingTransit = !transit || !transit.alerts || transit.alerts.length === 0;
+  const isLoadingCrowds = crowds === undefined; // Only loading if undefined, not if empty array
+  const isLoadingTransit = transit === undefined; // Only loading if undefined, not if empty alerts
 
   return (
     <div className="space-y-4">
@@ -179,6 +184,11 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
             <p className="text-sm text-blue-700">Analyzing venue crowd levels...</p>
           </div>
         </div>
+      ) : crowds && crowds.length === 0 ? (
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <h3 className="mb-3 text-lg font-semibold">Crowd Levels</h3>
+          <p className="text-sm text-gray-500">No crowd data available for these venues.</p>
+        </div>
       ) : null}
 
       {/* Transit Section */}
@@ -215,6 +225,11 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
             <p className="text-sm text-blue-700">Monitoring transit delays...</p>
           </div>
+        </div>
+      ) : transit && transit.alerts && transit.alerts.length === 0 ? (
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <h3 className="mb-3 text-lg font-semibold">Transit Alerts</h3>
+          <p className="text-sm text-green-600">✓ No transit delays detected nearby.</p>
         </div>
       ) : null}
 
