@@ -21,8 +21,11 @@ export async function registerStreamRoutes(app: FastifyInstance) {
       // Check if trip exists
       const tripData = store.getTrip(tripId);
       if (!tripData) {
+        app.log.warn(`SSE connection attempted for non-existent trip: ${tripId}`);
         return reply.code(404).send({ error: "Trip not found" });
       }
+
+      app.log.info(`SSE connection established for trip: ${tripId}`);
 
       // Set SSE headers
       reply.raw.writeHead(200, {

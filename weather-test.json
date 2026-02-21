@@ -1,0 +1,1 @@
+{"observedAt":"2026-02-22T21:00:00Z","weather":{"summary":"Rain risk between 21:00–22:30","riskHours":["21:00","21:30","22:00","22:30"]},"raw":{"list":[{"dt":1771771200,"dt_txt":"2026-02-22 21:00:00","main":{"temp":28,"feels_like":32,"humidity":85},"weather":[{"main":"Rain","description":"moderate rain"}],"pop":0.85}]}}

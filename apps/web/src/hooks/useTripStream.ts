@@ -55,7 +55,10 @@ export function useTripStream({
     });
 
     eventSource.onerror = (err) => {
-      console.error("SSE connection error:", err);
+      // Only log errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.warn("SSE connection error - this is normal if the trip doesn't exist or server restarted");
+      }
       eventSource.close();
     };
   }, [tripId, onSignalUpdate, onSuggestionNew, onItineraryVersion]);
