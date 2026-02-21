@@ -2,18 +2,27 @@
  * Weather and Crowd Worker - Polls weather and crowd data and updates API
  */
 import "dotenv/config";
-import { fetchCrowdData } from "@adaptive/integrations";
+import { besttimeNewForecast, besttimeLive } from "@adaptive/integrations";
 
 const API_BASE_URL = process.env.API_URL || "http://localhost:8080";
 const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
+const BESTTIME_API_KEY_PRIVATE = process.env.BESTTIME_API_KEY_PRIVATE;
 const WEATHER_POLL_INTERVAL_SEC = parseInt(
   process.env.WEATHER_POLL_INTERVAL_SEC || "120",
   10
 );
 const CROWD_POLL_INTERVAL_SEC = parseInt(
-  process.env.CROWD_POLL_INTERVAL_SEC || "180",
+  process.env.CROWD_POLL_INTERVAL_SEC || "300",
   10
 );
+const MAX_CROWD_VENUES_PER_TRIP = parseInt(
+  process.env.MAX_CROWD_VENUES_PER_TRIP || "8",
+  10
+);
+
+// ============================================================================
+// Types
+// ============================================================================
 
 interface Trip {
   tripId: string;
@@ -32,6 +41,7 @@ interface Activity {
     providerPlaceId?: string;
     category?: string;
     isIndoor?: boolean;
+    address?: string;
   };
 }
 
@@ -69,188 +79,172 @@ interface OpenWeatherForecastResponse {
   list: ForecastItem[];
 }
 
-/**
- * Fetch all trip IDs from API
- */
+// ============================================================================
+// Venue ID Cache (in-memory)
+// Maps placeId -> { venueId: string, peakHours: string[] }
+// ============================================================================
+
+const venueCache = new Map<string, { venueId: string; peakHours: string[] }>();
+
+// ============================================================================
+// Weather Helpers
+// ============================================================================
+
 async function fetchTripIds(): Promise<string[]> {
   const response = await fetch(`${API_BASE_URL}/trips`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch trip IDs: ${response.statusText}`);
+    throw new Error(`Failed to fetch trips: ${response.statusText}`);
   }
   const data = await response.json();
   return data.tripIds || [];
 }
 
-/**
- * Fetch trip data from API
- */
-async function fetchTripData(tripId: string): Promise<TripData | null> {
+async function fetchTripData(tripId: string): Promise<TripData> {
   const response = await fetch(`${API_BASE_URL}/trip/${tripId}`);
   if (!response.ok) {
-    if (response.status === 404) {
-      return null;
-    }
-    throw new Error(`Failed to fetch trip data: ${response.statusText}`);
+    throw new Error(`Failed to fetch trip ${tripId}: ${response.statusText}`);
   }
-  return response.json();
+  return await response.json();
 }
 
-/**
- * Fetch weather forecast from OpenWeather API
- */
+function getDateAtMidnight(dateStr: string): Date {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+}
+
 async function fetchWeatherForecast(
   lat: number,
   lon: number
-): Promise<OpenWeatherForecastResponse> {
+): Promise<ForecastItem[]> {
   const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_API_KEY}&units=metric`;
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Failed to fetch weather: ${response.statusText}`);
+    throw new Error(
+      `Weather API error: ${response.status} ${response.statusText}`
+    );
   }
-  return response.json();
+  const data: OpenWeatherForecastResponse = await response.json();
+  return data.list;
 }
 
-/**
- * Analyze weather forecast and identify risk hours
- */
-function analyzeWeatherForecast(rawForecast: OpenWeatherForecastResponse): {
-  summary: string;
-  riskHours: string[];
-} {
-  const riskHours: string[] = [];
-
-  // Analyze each forecast slot
-  for (const item of rawForecast.list) {
-    const isRisky =
-      item.pop >= 0.6 ||
-      item.weather.some((w) =>
-        ["Rain", "Thunderstorm", "Drizzle"].includes(w.main)
-      );
-
-    if (isRisky) {
-      // Convert dt to HH:mm format
-      const dateTime = new Date(item.dt * 1000);
-      const hour = dateTime.getHours().toString().padStart(2, "0");
-      const minute = dateTime.getMinutes().toString().padStart(2, "0");
-      const timeStr = `${hour}:${minute}`;
-
-      if (!riskHours.includes(timeStr)) {
-        riskHours.push(timeStr);
-      }
-    }
+async function fetchLatLngForCity(
+  city: string
+): Promise<{ lat: number; lon: number }> {
+  const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(
+    city
+  )}&limit=1&appid=${OPENWEATHER_API_KEY}`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Geocode API error: ${response.status}`);
   }
-
-  // Generate summary
-  let summary: string;
-  if (riskHours.length === 0) {
-    summary = "No rain risk detected";
-  } else if (riskHours.length === 1) {
-    summary = `Rain risk around ${riskHours[0]}`;
-  } else if (riskHours.length === 2) {
-    summary = `Rain risk between ${riskHours[0]}–${riskHours[1]}`;
-  } else {
-    const firstHour = riskHours[0];
-    const lastHour = riskHours[riskHours.length - 1];
-    summary = `Rain risk between ${firstHour}–${lastHour}`;
+  const data = await response.json();
+  if (!data || data.length === 0) {
+    throw new Error(`City not found: ${city}`);
   }
-
-  return { summary, riskHours };
+  return { lat: data[0].lat, lon: data[0].lon };
 }
 
-/**
- * Post weather signal to API
- */
 async function postWeatherSignal(
   tripId: string,
   summary: string,
   riskHours: string[],
-  raw: OpenWeatherForecastResponse
+  raw: any
 ): Promise<void> {
+  const payload = {
+    observedAt: new Date().toISOString(),
+    weather: { summary, riskHours },
+    raw,
+  };
+
   const response = await fetch(
     `${API_BASE_URL}/internal/trip/${tripId}/signals/weather`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        summary,
-        riskHours,
-        raw,
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     }
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to post weather signal: ${response.statusText}`);
+    throw new Error(
+      `Failed to post weather signal: ${response.status} ${response.statusText}`
+    );
   }
 }
 
-/**
- * Trigger recompute of suggestions
- */
 async function triggerRecompute(tripId: string): Promise<void> {
   const response = await fetch(
     `${API_BASE_URL}/internal/trip/${tripId}/recompute`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
     }
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to trigger recompute: ${response.statusText}`);
+    throw new Error(
+      `Failed to trigger recompute: ${response.status} ${response.statusText}`
+    );
   }
 }
 
-/**
- * Process a single trip
- */
-async function processTrip(tripId: string): Promise<void> {
+async function processTripWeather(tripId: string): Promise<void> {
   try {
-    console.log(`[${tripId}] Processing trip...`);
-
-    // Fetch trip data
     const tripData = await fetchTripData(tripId);
-    if (!tripData) {
-      console.log(`[${tripId}] Trip not found, skipping`);
+    const { trip } = tripData;
+
+    const tripDate = getDateAtMidnight(trip.date);
+    const now = new Date();
+    const hoursDiff = (tripDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    if (hoursDiff < 0 || hoursDiff > 120) {
+      console.log(
+        `[${tripId}] Trip date out of forecast window (${Math.round(hoursDiff)}h), skipping`
+      );
       return;
     }
 
-    const { trip, activities } = tripData;
-
-    // Need at least one activity with location
-    if (activities.length === 0) {
-      console.log(`[${tripId}] No activities, skipping`);
-      return;
-    }
-
-    // Use first activity location as representative location for the trip
-    const firstActivity = activities[0];
-    const { lat, lon } = firstActivity.place;
-
-    console.log(
-      `[${tripId}] Fetching weather for ${trip.city} (${lat}, ${lon})...`
-    );
-
-    // Fetch weather forecast
+    const { lat, lon } = await fetchLatLngForCity(trip.city);
     const forecast = await fetchWeatherForecast(lat, lon);
 
-    // Analyze forecast
-    const { summary, riskHours } = analyzeWeatherForecast(forecast);
+    const tripStart = new Date(`${trip.date}T${trip.startTime}:00Z`);
+    const tripEnd = new Date(`${trip.date}T${trip.endTime}:00Z`);
 
-    console.log(`[${tripId}] Weather: ${summary}`);
-    if (riskHours.length > 0) {
-      console.log(`[${tripId}] Risk hours: ${riskHours.join(", ")}`);
-    }
+    const forecastDuring = forecast.filter((item) => {
+      const dt = new Date(item.dt * 1000);
+      return dt >= tripStart && dt <= tripEnd;
+    });
 
-    // Post weather signal
-    await postWeatherSignal(tripId, summary, riskHours, forecast);
-    console.log(`[${tripId}] Weather signal posted`);
+    const riskHours: string[] = [];
+    const hasBadWeather = forecastDuring.some((item) => {
+      const isRain =
+        item.weather.some((w) =>
+          ["Rain", "Drizzle", "Thunderstorm"].includes(w.main)
+        ) && item.pop >= 0.3;
+      const isHeavyRain = item.pop >= 0.7;
 
-    // Trigger recompute
+      if (isRain || isHeavyRain) {
+        const dt = new Date(item.dt * 1000);
+        const hh = String(dt.getUTCHours()).padStart(2, "0");
+        const mm = String(dt.getUTCMinutes()).padStart(2, "0");
+        riskHours.push(`${hh}:${mm}`);
+        return true;
+      }
+      return false;
+    });
+
+    const summary = hasBadWeather
+      ? `Rain likely on ${trip.date}`
+      : `Clear skies expected`;
+
+    await postWeatherSignal(tripId, summary, riskHours, {
+      city: trip.city,
+      date: trip.date,
+      forecastCount: forecastDuring.length,
+    });
+
+    console.log(`[${tripId}] Weather signal updated: ${summary}`);
+
     await triggerRecompute(tripId);
     console.log(`[${tripId}] Recompute triggered`);
   } catch (error) {
@@ -258,15 +252,121 @@ async function processTrip(tripId: string): Promise<void> {
   }
 }
 
+async function pollWeather(): Promise<void> {
+  console.log("[Weather] Polling weather data...");
+
+  try {
+    const tripIds = await fetchTripIds();
+    console.log(`[Weather] Found ${tripIds.length} trips`);
+
+    if (tripIds.length === 0) {
+      console.log("[Weather] No trips to process");
+      return;
+    }
+
+    for (const tripId of tripIds) {
+      await processTripWeather(tripId);
+    }
+
+    console.log("[Weather] Polling cycle complete");
+  } catch (error) {
+    console.error("[Weather] Error during polling cycle:", error);
+  }
+}
+
+// ============================================================================
+// Crowd Helpers (BestTime Real API)
+// ============================================================================
+
+/**
+ * Get day_int from date string (Mon=0..Sun=6)
+ */
+function getDayInt(dateStr: string): number {
+  const date = new Date(dateStr + "T00:00:00Z");
+  const dayOfWeek = date.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  // BestTime uses Mon=0, ..., Sun=6
+  return dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+}
+
+/**
+ * Extract peak hours from BestTime forecast analysis for specific day
+ */
+function extractPeakHours(analysis: any, dayInt: number): string[] {
+  if (!analysis || !Array.isArray(analysis.day_info)) {
+    return [];
+  }
+
+  const dayInfo = analysis.day_info.find((d: any) => d.day_int === dayInt);
+  if (!dayInfo || !Array.isArray(dayInfo.busy_hours)) {
+    return [];
+  }
+
+  // busy_hours is array of integers (0-23)
+  return dayInfo.busy_hours.map((h: number) => {
+    const hourStr = String(h).padStart(2, "0");
+    return `${hourStr}:00`;
+  });
+}
+
+/**
+ * Ensure venue is cached with venue_id and peak hours
+ * Returns cached data or null if forecast failed
+ */
+async function ensureVenueCached(
+  placeId: string,
+  name: string,
+  address: string,
+  tripDate: string
+): Promise<{ venueId: string; peakHours: string[] } | null> {
+  // Check cache first
+  if (venueCache.has(placeId)) {
+    return venueCache.get(placeId)!;
+  }
+
+  // Call new forecast to get venue_id
+  console.log(`[Crowds] Fetching forecast for ${name}...`);
+  const forecast = await besttimeNewForecast({
+    apiKeyPrivate: BESTTIME_API_KEY_PRIVATE!,
+    venueName: name,
+    venueAddress: address,
+  });
+
+  if (!forecast.venueId) {
+    console.warn(`[Crowds] No venue_id returned for ${name}`);
+    return null;
+  }
+
+  // Extract peak hours for trip date
+  const dayInt = getDayInt(tripDate);
+  const peakHours = extractPeakHours(forecast.analysis, dayInt);
+
+  const cacheData = {
+    venueId: forecast.venueId,
+    peakHours,
+  };
+
+  venueCache.set(placeId, cacheData);
+  console.log(
+    `[Crowds] Cached venue ${name}: venueId=${forecast.venueId}, peaks=${peakHours.join(",")}`
+  );
+
+  return cacheData;
+}
+
 /**
  * Post crowd signals to API
  */
 async function postCrowdSignals(
   tripId: string,
-  crowds: Array<{ placeId: string; placeName: string; busyNow: number; peakHours: string[] }>,
+  crowds: Array<{
+    placeId: string;
+    placeName: string;
+    busyNow: number;
+    peakHours: string[];
+  }>,
   raw: any
 ): Promise<void> {
-  const body = {
+  const payload = {
     observedAt: new Date().toISOString(),
     crowds,
     raw,
@@ -277,29 +377,26 @@ async function postCrowdSignals(
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     }
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to post crowd signals: ${response.statusText}`);
+    throw new Error(
+      `Failed to post crowd signals: ${response.status} ${response.statusText}`
+    );
   }
 }
 
 /**
- * Process crowd data for one trip
+ * Process crowd data for a single trip
  */
-async function processTripCrowds(tripId: string): Promise<void> {
+async function processTripCrowd(tripId: string): Promise<void> {
   try {
-    console.log(`[Crowds][${tripId}] Processing...`);
+    console.log(`[Crowds][${tripId}] Processing trip...`);
 
     const tripData = await fetchTripData(tripId);
-    if (!tripData) {
-      console.log(`[Crowds][${tripId}] Trip not found, skipping`);
-      return;
-    }
-
-    const { activities } = tripData;
+    const { trip, activities } = tripData;
 
     if (activities.length === 0) {
       console.log(`[Crowds][${tripId}] No activities, skipping`);
@@ -307,7 +404,7 @@ async function processTripCrowds(tripId: string): Promise<void> {
     }
 
     console.log(
-      `[Crowds][${tripId}] Fetching crowd data for ${activities.length} places (max 8)...`
+      `[Crowds][${tripId}] Fetching crowd data for ${activities.length} places (max ${MAX_CROWD_VENUES_PER_TRIP})...`
     );
 
     const crowds: Array<{
@@ -317,34 +414,61 @@ async function processTripCrowds(tripId: string): Promise<void> {
       peakHours: string[];
     }> = [];
 
-    // Limit to 8 places to avoid rate limits
-    const limitedActivities = activities.slice(0, 8);
+    // Limit to max venues
+    const limitedActivities = activities.slice(0, MAX_CROWD_VENUES_PER_TRIP);
 
     for (const activity of limitedActivities) {
-      const { busyNow, peakHours } = await fetchCrowdData({
-        name: activity.place.name,
-        category: activity.place.category,
-        lat: activity.place.lat,
-        lng: activity.place.lon,
-        isIndoor: activity.place.isIndoor,
+      const { place } = activity;
+      const placeId = place.providerPlaceId || activity.activityId;
+      const name = place.name;
+      const address = place.address || trip.city;
+
+      // Ensure venue is cached
+      const cached = await ensureVenueCached(placeId, name, address, trip.date);
+      if (!cached) {
+        console.warn(`[Crowds][${tripId}] Skipping ${name} (forecast failed)`);
+        continue;
+      }
+
+      // Rate limiting: 200ms between requests (5 req/sec)
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Fetch live data
+      console.log(`[Crowds][${tripId}] Fetching live data for ${name}...`);
+      const live = await besttimeLive({
+        apiKeyPrivate: BESTTIME_API_KEY_PRIVATE!,
+        venueId: cached.venueId,
       });
+
+      // Determine busyNow: prefer live, fallback to forecasted
+      const busyNow = live.liveBusyness ?? live.forecastedBusyness;
+
+      if (busyNow === null) {
+        console.warn(`[Crowds][${tripId}] No busyness data for ${name}`);
+        continue;
+      }
 
       crowds.push({
-        placeId: activity.place.providerPlaceId || activity.activityId,
-        placeName: activity.place.name,
+        placeId,
+        placeName: name,
         busyNow,
-        peakHours,
+        peakHours: cached.peakHours,
       });
 
-      const category = activity.place.category || "unknown";
+      const liveLabel = live.liveAvailable ? "live" : "forecasted";
       console.log(
-        `[Crowds][${tripId}] ${activity.place.name} (${category}): ${busyNow}% busy, peak ${peakHours.join(", ")}`
+        `[Crowds][${tripId}] ${name}: ${busyNow}% (${liveLabel}), peak ${cached.peakHours.join(", ")}`
       );
     }
 
+    if (crowds.length === 0) {
+      console.log(`[Crowds][${tripId}] No crowd data collected`);
+      return;
+    }
+
     // Post crowd signals
-    await postCrowdSignals(tripId, crowds, { source: "worker" });
-    console.log(`[Crowds][${tripId}] Crowd signals posted`);
+    await postCrowdSignals(tripId, crowds, { source: "worker-besttime" });
+    console.log(`[Crowds][${tripId}] Crowd signals posted (${crowds.length} places)`);
 
     // Trigger recompute
     await triggerRecompute(tripId);
@@ -355,41 +479,22 @@ async function processTripCrowds(tripId: string): Promise<void> {
 }
 
 /**
- * Main polling loop for weather
- */
-async function pollWeather(): Promise<void> {
-  console.log("[Weather] Polling weather data...");
-
-  try {
-    // Fetch all trip IDs
-    const tripIds = await fetchTripIds();
-    console.log(`[Weather] Found ${tripIds.length} trips`);
-
-    // Process each trip
-    for (const tripId of tripIds) {
-      await processTrip(tripId);
-    }
-
-    console.log("[Weather] Polling cycle complete");
-  } catch (error) {
-    console.error("[Weather] Error during polling cycle:", error);
-  }
-}
-
-/**
- * Main polling loop for crowds
+ * Poll crowd data for all trips
  */
 async function pollCrowds(): Promise<void> {
   console.log("[Crowds] Polling crowd data...");
 
   try {
-    // Fetch all trip IDs
     const tripIds = await fetchTripIds();
     console.log(`[Crowds] Found ${tripIds.length} trips`);
 
-    // Process each trip
+    if (tripIds.length === 0) {
+      console.log("[Crowds] No trips to process");
+      return;
+    }
+
     for (const tripId of tripIds) {
-      await processTripCrowds(tripId);
+      await processTripCrowd(tripId);
     }
 
     console.log("[Crowds] Polling cycle complete");
@@ -398,12 +503,13 @@ async function pollCrowds(): Promise<void> {
   }
 }
 
-/**
- * Start worker
- */
+// ============================================================================
+// Worker Startup
+// ============================================================================
+
 async function start() {
-  console.log("=== Weather & Crowd Worker ===");
-  
+  console.log("=== Weather & Crowd Worker (BestTime Real API) ===");
+
   // Validate required API keys
   if (!OPENWEATHER_API_KEY) {
     console.error("ERROR: OPENWEATHER_API_KEY is required but not set in .env");
@@ -411,23 +517,36 @@ async function start() {
     process.exit(1);
   }
 
+  // Crowd polling is optional
+  const crowdEnabled = !!BESTTIME_API_KEY_PRIVATE;
+
   console.log(`API URL: ${API_BASE_URL}`);
   console.log(`Weather poll interval: ${WEATHER_POLL_INTERVAL_SEC}s`);
   console.log(`Crowd poll interval: ${CROWD_POLL_INTERVAL_SEC}s`);
-  console.log("✓ Using hybrid crowd detection (category-based heuristics)");
+  console.log(
+    `Crowd detection: ${crowdEnabled ? "✓ ENABLED (BestTime real API)" : "✗ DISABLED (BESTTIME_API_KEY_PRIVATE not set)"}`
+  );
+
+  if (crowdEnabled) {
+    console.log(`Max venues per trip: ${MAX_CROWD_VENUES_PER_TRIP}`);
+  }
 
   // Initial polls
   await pollWeather();
-  await pollCrowds();
+  if (crowdEnabled) {
+    await pollCrowds();
+  }
 
   // Set up intervals
   setInterval(async () => {
     await pollWeather();
   }, WEATHER_POLL_INTERVAL_SEC * 1000);
 
-  setInterval(async () => {
-    await pollCrowds();
-  }, CROWD_POLL_INTERVAL_SEC * 1000);
+  if (crowdEnabled) {
+    setInterval(async () => {
+      await pollCrowds();
+    }, CROWD_POLL_INTERVAL_SEC * 1000);
+  }
 
   console.log("Worker started");
 }

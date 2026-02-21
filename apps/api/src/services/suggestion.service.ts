@@ -200,7 +200,8 @@ function findCrowdedActivities(
     if (!crowdData) continue;
 
     // Check if currently very busy OR scheduled during peak hours
-    const isVeryBusy = crowdData.busyNow >= 80;
+    // busyNow can exceed 100 from BestTime live data
+    const isVeryBusy = crowdData.busyNow >= 85;
     const isDuringPeak = 
       isTimeInPeakHours(item.startTime, crowdData.peakHours) ||
       isTimeInPeakHours(item.endTime, crowdData.peakHours);
@@ -282,8 +283,10 @@ export function buildCrowdSuggestion(
       ? crowdData.peakHours.slice(0, 2).join(", ")
       : "peak hours";
     
-    if (crowdData.busyNow >= 80) {
-      reasons.push(`${activity.place.name} is very busy right now (${crowdData.busyNow}% capacity)`);
+    if (crowdData.busyNow >= 85) {
+      // Live busyness may exceed 100
+      const displayBusy = Math.min(crowdData.busyNow, 150); // Cap display at 150%
+      reasons.push(`${activity.place.name} is very busy around ${peakDisplay} (live busyness ${displayBusy}%)`);
     } else {
       reasons.push(`${activity.place.name} is predicted very busy around ${peakDisplay}`);
     }
