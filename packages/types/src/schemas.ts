@@ -159,9 +159,27 @@ export const UpsertCrowdSignalRequestSchema = z.object({
   raw: z.any().optional(),
 });
 
+// Transit signal schemas
+export const TransitAlertSchema = z.object({
+  line: z.string(),
+  delayMin: z.number().min(0),
+  message: z.string(),
+});
+
+export const TransitSignalSchema = z.object({
+  alerts: z.array(TransitAlertSchema),
+});
+
+export const UpsertTransitSignalRequestSchema = z.object({
+  observedAt: z.string(),
+  transit: TransitSignalSchema,
+  raw: z.any().optional(),
+});
+
 export const SignalsResponseSchema = z.object({
   weather: SignalWeatherSchema,
   crowds: z.array(CrowdSignalItemSchema),
+  transit: TransitSignalSchema,
 });
 
 // ===== Suggestion Schemas =====
@@ -202,6 +220,9 @@ export type SignalWeather = z.infer<typeof SignalWeatherSchema>;
 export type UpsertWeatherSignalRequest = z.infer<typeof UpsertWeatherSignalRequestSchema>;
 export type CrowdSignalItem = z.infer<typeof CrowdSignalItemSchema>;
 export type UpsertCrowdSignalRequest = z.infer<typeof UpsertCrowdSignalRequestSchema>;
+export type TransitAlert = z.infer<typeof TransitAlertSchema>;
+export type TransitSignal = z.infer<typeof TransitSignalSchema>;
+export type UpsertTransitSignalRequest = z.infer<typeof UpsertTransitSignalRequestSchema>;
 export type SignalsResponse = z.infer<typeof SignalsResponseSchema>;
 export type Suggestion = z.infer<typeof SuggestionSchema>;
 export type ListSuggestionsResponse = z.infer<typeof ListSuggestionsResponseSchema>;

@@ -6,6 +6,7 @@ import {
   SignalsResponseSchema,
   UpsertWeatherSignalRequestSchema,
   UpsertCrowdSignalRequestSchema,
+  UpsertTransitSignalRequestSchema,
 } from "@adaptive/types";
 import * as store from "../store/store.js";
 import * as sseHub from "../realtime/sseHub.js";
@@ -35,6 +36,9 @@ export async function registerSignalsRoutes(app: FastifyInstance) {
         
         // Get crowd signals
         const crowdSignal = store.getCrowdSignals(tripId);
+        
+        // Get transit signals
+        const transitSignal = store.getTransitSignals(tripId);
 
         const response = SignalsResponseSchema.parse({
           weather: weatherSignal
@@ -47,6 +51,9 @@ export async function registerSignalsRoutes(app: FastifyInstance) {
                 riskHours: [],
               },
           crowds: crowdSignal ? crowdSignal.crowds : [],
+          transit: transitSignal
+            ? { alerts: transitSignal.alerts }
+            : { alerts: [] },
         });
 
         return reply.send(response);
@@ -143,6 +150,51 @@ export async function registerSignalsRoutes(app: FastifyInstance) {
           return reply.code(400).send({ error: "Invalid request data", details: error });
         }
         console.error("Error upserting crowd signals:", error);
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
+  // POST /internal/trip/:tripId/signals/transit - Update transit signals (internal use)
+  app.post(
+    "/internal/trip/:tripId/signals/transit",
+    async (
+      request: FastifyRequest<{ Params: { tripId: string } }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const { tripId } = request.params;
+
+        // Check if trip exists
+        const tripData = store.getTrip(tripId);
+        if (!tripData) {
+          return reply.code(404).send({ error: "Trip not found" });
+        }
+
+        // Validate request body
+        const body = UpsertTransitSignalRequestSchema.parse(request.body);
+
+        // Store transit signals
+        store.upsertTransitSignals(tripId, {
+          observedAt: body.observedAt,
+          alerts: body.transit.alerts,
+          raw: body.raw,
+        });
+
+        console.log(`[Transit] Updated transit signals for trip ${tripId}: ${body.transit.alerts.length} alerts`);
+
+        // Emit SSE event
+        sseHub.emit(tripId, "signal:update", {
+          type: "transit",
+          observedAt: body.observedAt,
+        });
+
+        return reply.send({ ok: true });
+      } catch (error) {
+        if (error instanceof Error && error.name === "ZodError") {
+          return reply.code(400).send({ error: "Invalid request data", details: error });
+        }
+        console.error("Error upserting transit signals:", error);
         return reply.code(500).send({ error: "Internal server error" });
       }
     }

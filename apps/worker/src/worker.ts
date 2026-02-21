@@ -1,5 +1,5 @@
 /**
- * Weather and Crowd Worker - Polls weather and crowd data and updates API
+ * Weather, Crowd, and Transit Worker - Polls real-time data and updates API
  */
 import { config } from "dotenv";
 import { resolve } from "path";
@@ -11,7 +11,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 config({ path: resolve(__dirname, "../../../.env") });
 
-import { besttimeNewForecast, besttimeLive } from "@adaptive/integrations";
+import { 
+  besttimeNewForecast, 
+  besttimeLive,
+  fetchGtfsRt,
+  extractAlerts,
+  extractTripUpdateDelays,
+  mergeAlerts
+} from "@adaptive/integrations";
 
 const API_BASE_URL = process.env.API_URL || "http://localhost:8080";
 const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
@@ -26,6 +33,16 @@ const CROWD_POLL_INTERVAL_SEC = parseInt(
 );
 const MAX_CROWD_VENUES_PER_TRIP = parseInt(
   process.env.MAX_CROWD_VENUES_PER_TRIP || "8",
+  10
+);
+const GTFSRT_TRIPUPDATES_URL = process.env.GTFSRT_TRIPUPDATES_URL || "";
+const GTFSRT_ALERTS_URL = process.env.GTFSRT_ALERTS_URL || "";
+const TRANSIT_POLL_INTERVAL_SEC = parseInt(
+  process.env.TRANSIT_POLL_INTERVAL_SEC || "180",
+  10
+);
+const TRANSIT_DELAY_THRESHOLD_MIN = parseInt(
+  process.env.TRANSIT_DELAY_THRESHOLD_MIN || "10",
   10
 );
 
@@ -513,11 +530,116 @@ async function pollCrowds(): Promise<void> {
 }
 
 // ============================================================================
+// Transit Polling Loop (GTFS-Realtime)
+// ============================================================================
+
+/**
+ * Poll GTFS-Realtime feeds for transit delays and alerts
+ */
+async function pollTransit(): Promise<void> {
+  console.log("[Transit] Polling transit data...");
+
+  try {
+    const tripIds = await fetchTripIds();
+    console.log(`[Transit] Found ${tripIds.length} trips`);
+
+    if (tripIds.length === 0) {
+      console.log("[Transit] No trips to process");
+      return;
+    }
+
+    // Fetch trip updates if URL is set
+    let tripUpdateAlerts: any[] = [];
+    if (GTFSRT_TRIPUPDATES_URL) {
+      console.log("[Transit] Fetching trip updates feed...");
+      const tripUpdateFeed = await fetchGtfsRt(GTFSRT_TRIPUPDATES_URL);
+      if (tripUpdateFeed) {
+        tripUpdateAlerts = extractTripUpdateDelays(tripUpdateFeed);
+        console.log(`[Transit] Extracted ${tripUpdateAlerts.length} delays from trip updates`);
+      } else {
+        console.log("[Transit] Trip updates feed returned no data");
+      }
+    }
+
+    // Fetch alerts if URL is set
+    let serviceAlerts: any[] = [];
+    if (GTFSRT_ALERTS_URL) {
+      console.log("[Transit] Fetching service alerts feed...");
+      const alertsFeed = await fetchGtfsRt(GTFSRT_ALERTS_URL);
+      if (alertsFeed) {
+        serviceAlerts = extractAlerts(alertsFeed);
+        console.log(`[Transit] Extracted ${serviceAlerts.length} service alerts`);
+      } else {
+        console.log("[Transit] Service alerts feed returned no data");
+      }
+    }
+
+    // Combine and merge alerts (keep top 5)
+    const combinedAlerts = mergeAlerts([...tripUpdateAlerts, ...serviceAlerts], 5);
+
+    if (combinedAlerts.length === 0) {
+      console.log("[Transit] No significant transit alerts found");
+      // Still post empty alerts to clear old data
+    }
+
+    // Post transit signals to each trip
+    for (const tripId of tripIds) {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/internal/trip/${tripId}/signals/transit`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              observedAt: new Date().toISOString(),
+              transit: {
+                alerts: combinedAlerts,
+              },
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          console.error(
+            `[Transit][${tripId}] Failed to post transit signals: ${response.status}`
+          );
+          continue;
+        }
+
+        console.log(
+          `[Transit][${tripId}] Posted ${combinedAlerts.length} transit alerts`
+        );
+
+        // Trigger recompute
+        const recomputeResp = await fetch(
+          `${API_BASE_URL}/internal/trip/${tripId}/recompute`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          }
+        );
+
+        if (recomputeResp.ok) {
+          console.log(`[Transit][${tripId}] Recompute triggered`);
+        }
+      } catch (error) {
+        console.error(`[Transit][${tripId}] Error posting signals:`, error);
+      }
+    }
+
+    console.log("[Transit] Polling cycle complete");
+  } catch (error) {
+    console.error("[Transit] Error during polling cycle:", error);
+  }
+}
+
+// ============================================================================
 // Worker Startup
 // ============================================================================
 
 async function start() {
-  console.log("=== Weather & Crowd Worker (BestTime Real API) ===");
+  console.log("=== Weather, Crowd & Transit Worker ===");
 
   // Validate required API keys
   if (!OPENWEATHER_API_KEY) {
@@ -528,16 +650,33 @@ async function start() {
 
   // Crowd polling is optional
   const crowdEnabled = !!BESTTIME_API_KEY_PRIVATE;
+  
+  // Transit polling is optional (enabled if at least one feed URL is set)
+  const transitEnabled = !!(GTFSRT_TRIPUPDATES_URL || GTFSRT_ALERTS_URL);
 
   console.log(`API URL: ${API_BASE_URL}`);
   console.log(`Weather poll interval: ${WEATHER_POLL_INTERVAL_SEC}s`);
   console.log(`Crowd poll interval: ${CROWD_POLL_INTERVAL_SEC}s`);
+  console.log(`Transit poll interval: ${TRANSIT_POLL_INTERVAL_SEC}s`);
   console.log(
     `Crowd detection: ${crowdEnabled ? "✓ ENABLED (BestTime real API)" : "✗ DISABLED (BESTTIME_API_KEY_PRIVATE not set)"}`
+  );
+  console.log(
+    `Transit monitoring: ${transitEnabled ? "✓ ENABLED (GTFS-Realtime)" : "✗ DISABLED (no GTFS-RT feed URLs set)"}`
   );
 
   if (crowdEnabled) {
     console.log(`Max venues per trip: ${MAX_CROWD_VENUES_PER_TRIP}`);
+  }
+  
+  if (transitEnabled) {
+    console.log(`Transit delay threshold: ${TRANSIT_DELAY_THRESHOLD_MIN} minutes`);
+    if (GTFSRT_TRIPUPDATES_URL) {
+      console.log(`Trip updates feed: ${GTFSRT_TRIPUPDATES_URL.substring(0, 50)}...`);
+    }
+    if (GTFSRT_ALERTS_URL) {
+      console.log(`Service alerts feed: ${GTFSRT_ALERTS_URL.substring(0, 50)}...`);
+    }
   }
 
   // Wait for API server to be ready
@@ -573,6 +712,9 @@ async function start() {
   if (crowdEnabled) {
     await pollCrowds();
   }
+  if (transitEnabled) {
+    await pollTransit();
+  }
 
   // Set up intervals
   setInterval(async () => {
@@ -583,6 +725,12 @@ async function start() {
     setInterval(async () => {
       await pollCrowds();
     }, CROWD_POLL_INTERVAL_SEC * 1000);
+  }
+
+  if (transitEnabled) {
+    setInterval(async () => {
+      await pollTransit();
+    }, TRANSIT_POLL_INTERVAL_SEC * 1000);
   }
 
   console.log("Worker started");

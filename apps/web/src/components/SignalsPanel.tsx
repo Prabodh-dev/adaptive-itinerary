@@ -17,6 +17,16 @@ function getCrowdColor(busyNow: number): { bg: string; text: string; label: stri
   }
 }
 
+function getTransitDelayColor(delayMin: number): { bg: string; text: string } {
+  if (delayMin < 5) {
+    return { bg: "bg-green-100", text: "text-green-700" };
+  } else if (delayMin < 10) {
+    return { bg: "bg-yellow-100", text: "text-yellow-700" };
+  } else {
+    return { bg: "bg-red-100", text: "text-red-700" };
+  }
+}
+
 export default function SignalsPanel({ tripId }: SignalsPanelProps) {
   const [signals, setSignals] = useState<SignalsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +44,7 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
         // If data is still loading, poll frequently
         const hasWeather = data.weather && data.weather.summary && data.weather.summary !== "No data yet";
         const hasCrowds = data.crowds && data.crowds.length > 0;
+        const hasTransit = data.transit && data.transit.alerts && data.transit.alerts.length > 0;
         
         // Clear existing interval
         if (intervalId) {
@@ -42,7 +53,7 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
         }
         
         // If still waiting for data, poll every 5 seconds
-        if (!hasWeather || !hasCrowds) {
+        if (!hasWeather || !hasCrowds || !hasTransit) {
           intervalId = setInterval(async () => {
             try {
               const newData = await getSignals(tripId);
@@ -51,8 +62,9 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
               // Stop polling once we have all data
               const nowHasWeather = newData.weather && newData.weather.summary && newData.weather.summary !== "No data yet";
               const nowHasCrowds = newData.crowds && newData.crowds.length > 0;
+              const nowHasTransit = newData.transit && newData.transit.alerts && newData.transit.alerts.length > 0;
               
-              if (nowHasWeather && nowHasCrowds && intervalId) {
+              if (nowHasWeather && nowHasCrowds && nowHasTransit && intervalId) {
                 clearInterval(intervalId);
                 intervalId = null;
               }
@@ -93,11 +105,13 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
     );
   }
 
-  const { weather, crowds } = signals || {};
+  const { weather, crowds, transit } = signals || {};
   const hasWeather = weather && weather.summary && weather.summary !== "No data yet";
   const hasCrowds = crowds && crowds.length > 0;
+  const hasTransit = transit && transit.alerts && transit.alerts.length > 0;
   const isLoadingWeather = !weather || !weather.summary || weather.summary === "No data yet";
   const isLoadingCrowds = !crowds || crowds.length === 0;
+  const isLoadingTransit = !transit || !transit.alerts || transit.alerts.length === 0;
 
   return (
     <div className="space-y-4">
@@ -167,7 +181,44 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
         </div>
       ) : null}
 
-      {!hasWeather && !hasCrowds && !isLoadingWeather && !isLoadingCrowds && (
+      {/* Transit Section */}
+      {hasTransit ? (
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <h3 className="mb-3 text-lg font-semibold">Transit Alerts</h3>
+          
+          <div className="space-y-3">
+            {transit.alerts.map((alert, idx) => {
+              const delayInfo = getTransitDelayColor(alert.delayMin);
+              return (
+                <div key={idx} className={`rounded border p-3 ${delayInfo.bg}`}>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🚇</span>
+                        <span className={`font-semibold ${delayInfo.text}`}>{alert.line}</span>
+                      </div>
+                      <p className={`mt-1 text-sm ${delayInfo.text}`}>{alert.message}</p>
+                    </div>
+                    <div className={`ml-2 flex flex-col items-end`}>
+                      <span className={`text-xs font-medium ${delayInfo.text}`}>Delay</span>
+                      <span className={`text-lg font-bold ${delayInfo.text}`}>{alert.delayMin}m</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : isLoadingTransit ? (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <div className="flex items-center gap-2">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+            <p className="text-sm text-blue-700">Monitoring transit delays...</p>
+          </div>
+        </div>
+      ) : null}
+
+      {!hasWeather && !hasCrowds && !hasTransit && !isLoadingWeather && !isLoadingCrowds && !isLoadingTransit && (
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <p className="text-sm text-gray-500">No signals available yet.</p>
         </div>

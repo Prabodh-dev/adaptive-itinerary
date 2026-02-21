@@ -13,7 +13,7 @@ import {
 } from "@adaptive/types";
 import * as store from "../store/store.js";
 import { generateItinerary } from "../services/planner.service.js";
-import { buildWeatherSuggestion, buildCrowdSuggestion } from "../services/suggestion.service.js";
+import { buildWeatherSuggestion, buildCrowdSuggestion, buildTransitSuggestion } from "../services/suggestion.service.js";
 import { emit } from "../realtime/sseHub.js";
 
 /**
@@ -179,6 +179,9 @@ export async function registerTripRoutes(app: FastifyInstance) {
         
         // Get crowd signals
         const crowdSignal = store.getCrowdSignals(tripId);
+        
+        // Get transit signals
+        const transitSignal = store.getTransitSignals(tripId);
 
         // Build weather suggestion
         const weatherSuggestion = buildWeatherSuggestion(
@@ -195,8 +198,16 @@ export async function registerTripRoutes(app: FastifyInstance) {
           latestItinerary?.itinerary,
           crowdSignal
         );
+        
+        // Build transit suggestion
+        const transitSuggestion = buildTransitSuggestion(
+          trip,
+          activities,
+          latestItinerary?.itinerary,
+          transitSignal
+        );
 
-        const suggestions = [weatherSuggestion, crowdSuggestion].filter(Boolean);
+        const suggestions = [weatherSuggestion, crowdSuggestion, transitSuggestion].filter(Boolean);
 
         if (suggestions.length > 0) {
           // Store and emit each suggestion

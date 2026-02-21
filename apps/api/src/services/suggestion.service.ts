@@ -10,7 +10,7 @@ import type {
   Suggestion,
   CrowdSignalItem,
 } from "@adaptive/types";
-import type { WeatherSignalRecord, CrowdSignalRecord } from "../store/store.js";
+import type { WeatherSignalRecord, CrowdSignalRecord, TransitSignalRecord } from "../store/store.js";
 
 /**
  * Check if a time falls within risk hours
@@ -303,6 +303,99 @@ export function buildCrowdSuggestion(
     reasons,
     benefit: {
       crowdExposureReduced: 0.6,
+    },
+    beforePlan: {
+      items: latestItinerary.items,
+    },
+    afterPlan: {
+      items: afterPlanItems,
+    },
+  };
+
+  return suggestion;
+}
+
+/**
+ * Build a transit-based suggestion
+ * Returns null if no suggestion needed
+ */
+export function buildTransitSuggestion(
+  _trip: Trip,
+  activities: Activity[],
+  latestItinerary: Itinerary | undefined,
+  transitSignal: TransitSignalRecord | null
+): Suggestion | null {
+  // No transit data
+  if (!transitSignal || transitSignal.alerts.length === 0) {
+    return null;
+  }
+
+  // No itinerary yet
+  if (!latestItinerary || latestItinerary.items.length === 0) {
+    return null;
+  }
+
+  // Get TRANSIT_DELAY_THRESHOLD_MIN from env, default to 10
+  const delayThreshold = parseInt(process.env.TRANSIT_DELAY_THRESHOLD_MIN || "10", 10);
+
+  // Find significant delays
+  const significantDelays = transitSignal.alerts.filter(
+    (alert) => alert.delayMin >= delayThreshold
+  );
+
+  if (significantDelays.length === 0) {
+    return null;
+  }
+
+  // Respect locked activities
+  const lockedIds = new Set(
+    activities.filter((a) => a.locked).map((a) => a.activityId)
+  );
+
+  // Build reasons
+  const reasons: string[] = [];
+  let totalDelay = 0;
+  for (const alert of significantDelays) {
+    reasons.push(
+      `Transit delay detected: ${alert.line} delayed by ${alert.delayMin} min`
+    );
+    totalDelay += alert.delayMin;
+  }
+  reasons.push("Reordered nearby stops to reduce idle time during delays");
+
+  // Simple reorder strategy: move first 1-2 non-locked items later
+  // This gives more buffer time if user is starting their trip
+  const afterPlanItems: ItineraryItem[] = [];
+  const itemsToShift: ItineraryItem[] = [];
+  const restItems: ItineraryItem[] = [];
+
+  let shiftedCount = 0;
+  const maxToShift = 2;
+
+  for (const item of latestItinerary.items) {
+    if (lockedIds.has(item.activityId)) {
+      // Keep locked items in order
+      restItems.push(item);
+    } else if (shiftedCount < maxToShift) {
+      // Shift these items later
+      itemsToShift.push(item);
+      shiftedCount++;
+    } else {
+      restItems.push(item);
+    }
+  }
+
+  // New order: rest items first, then shifted items (gives buffer at start)
+  afterPlanItems.push(...restItems, ...itemsToShift);
+
+  const suggestionId = `sug_${nanoid(10)}`;
+
+  const suggestion: Suggestion = {
+    suggestionId,
+    kind: "reorder",
+    reasons,
+    benefit: {
+      delayAvoidedMin: totalDelay,
     },
     beforePlan: {
       items: latestItinerary.items,

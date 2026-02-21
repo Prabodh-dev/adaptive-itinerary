@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@adaptive/types": "workspace:*"
+    "@adaptive/types": "workspace:*",
+    "gtfs-realtime-bindings": "^1.1.1"
   },
   "devDependencies": {
     "typescript": "^5.0.0"

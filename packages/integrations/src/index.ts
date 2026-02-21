@@ -12,3 +12,12 @@ export type {
   BesttimeLiveArgs,
   BesttimeLiveResult
 } from "./besttime.js";
+
+// Export GTFS-Realtime transit delays and alerts
+export { 
+  fetchGtfsRt, 
+  extractAlerts, 
+  extractTripUpdateDelays,
+  mergeAlerts 
+} from "./gtfsrt.js";
+export type { TransitAlert } from "./gtfsrt.js";

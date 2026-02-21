@@ -134,6 +134,13 @@ export interface CrowdSignalItem {
 export interface SignalsResponse {
   weather: SignalWeather;
   crowds: CrowdSignalItem[];
+  transit?: {
+    alerts: Array<{
+      line: string;
+      delayMin: number;
+      message: string;
+    }>;
+  };
 }
 
 export interface Suggestion {
