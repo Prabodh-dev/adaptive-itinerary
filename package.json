@@ -1,0 +1,11 @@
+{
+  "name": "adaptive-itinerary",
+  "private": true,
+  "packageManager": "pnpm@9",
+  "scripts": {
+    "dev": "pnpm -r dev"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
