@@ -8,14 +8,16 @@
     "start": "tsx src/server.ts"
   },
   "dependencies": {
+    "@adaptive/integrations": "workspace:*",
     "@adaptive/types": "workspace:*",
-    "fastify": "^4.25.2",
     "@fastify/cors": "^8.5.0",
+    "dotenv": "^17.3.1",
+    "fastify": "^4.25.2",
     "nanoid": "^5.0.4"
   },
   "devDependencies": {
+    "@types/node": "^20.10.6",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3",
-    "@types/node": "^20.10.6"
+    "typescript": "^5.3.3"
   }
 }

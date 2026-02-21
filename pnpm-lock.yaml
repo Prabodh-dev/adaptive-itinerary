@@ -14,12 +14,18 @@ importers:
 
   apps/api:
     dependencies:
+      '@adaptive/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@adaptive/types':
         specifier: workspace:*
         version: link:../../packages/types
       '@fastify/cors':
         specifier: ^8.5.0
         version: 8.5.0
+      dotenv:
+        specifier: ^17.3.1
+        version: 17.3.1
       fastify:
         specifier: ^4.25.2
         version: 4.29.1
@@ -67,6 +73,16 @@ importers:
       tailwindcss:
         specifier: ^4.0.0
         version: 4.2.0
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+
+  packages/integrations:
+    dependencies:
+      '@adaptive/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
@@ -638,6 +654,10 @@ packages:
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
+
+  dotenv@17.3.1:
+    resolution: {integrity: sha512-IO8C/dzEb6O3F9/twg6ZLXz164a2fhTnEWb95H23Dm4OuN+92NmEAlTrupP9VW6Jm3sO26tQlqyvyi4CsnY9GA==}
+    engines: {node: '>=12'}
 
   enhanced-resolve@5.19.0:
     resolution: {integrity: sha512-phv3E1Xl4tQOShqSte26C7Fl84EwUdZsyOuSSk9qtAGyyQs2s3jJzComh+Abf4g187lUUAvH+H26omrqia2aGg==}
@@ -1353,6 +1373,8 @@ snapshots:
   csstype@3.2.3: {}
 
   detect-libc@2.1.2: {}
+
+  dotenv@17.3.1: {}
 
   enhanced-resolve@5.19.0:
     dependencies:
