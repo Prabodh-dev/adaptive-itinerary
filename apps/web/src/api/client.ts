@@ -25,7 +25,16 @@ export interface CreateTripResponse {
 }
 
 export interface ActivityInput {
-  place: { name: string; lat: number; lng: number };
+  place: {
+    provider: string;
+    providerPlaceId: string;
+    name: string;
+    lat: number;
+    lng: number;
+    category?: string;
+    isIndoor?: boolean;
+    address?: string;
+  };
   durationMin: number;
   locked: boolean;
 }
@@ -49,11 +58,13 @@ export interface GenerateItineraryResponse {
 }
 
 export interface PlaceSearchResult {
+  provider: string;
   providerPlaceId: string;
   name: string;
   lat: number;
   lng: number;
   category?: string;
+  isIndoor?: boolean;
   address?: string;
 }
 
@@ -71,7 +82,11 @@ export interface PlaceSearchResponse {
 export interface GetTripResponse {
   trip: Record<string, unknown>;
   activities: ActivityInput[];
-  itinerary: Itinerary | null;
+  latestItinerary?: {
+    version: number;
+    itinerary: Itinerary;
+    generatedAt: string;
+  };
 }
 
 export async function createTrip(data: CreateTripRequest): Promise<CreateTripResponse> {
@@ -82,8 +97,8 @@ export async function addActivities(tripId: string, activities: ActivityInput[])
   await request(`/trip/${tripId}/activities`, { method: "POST", body: JSON.stringify({ activities }) });
 }
 
-export async function generateItinerary(tripId: string): Promise<GenerateItineraryResponse> {
-  return request<GenerateItineraryResponse>(`/trip/${tripId}/itinerary/generate`, { method: "POST" });
+export async function generateItinerary(tripId: string, mode: "driving" | "walking" | "transit"): Promise<GenerateItineraryResponse> {
+  return request<GenerateItineraryResponse>(`/trip/${tripId}/itinerary/generate`, { method: "POST", body: JSON.stringify({ mode }) });
 }
 
 export async function getTrip(tripId: string): Promise<GetTripResponse> {

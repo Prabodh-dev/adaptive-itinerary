@@ -3,9 +3,12 @@
   "private": true,
   "packageManager": "pnpm@9",
   "scripts": {
-    "dev": "pnpm -r dev"
+    "dev": "concurrently --kill-others-on-fail \"pnpm --filter @adaptive/api dev\" \"pnpm --filter @adaptive/web dev\"",
+    "dev:api": "pnpm --filter @adaptive/api dev",
+    "dev:web": "pnpm --filter @adaptive/web dev"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "typescript": "^5.0.0"
   }
 }

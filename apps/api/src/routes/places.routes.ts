@@ -13,7 +13,7 @@ export async function registerPlacesRoutes(app: FastifyInstance) {
     try {
       // Validate request body
       const body = PlacesSearchRequestSchema.parse(req.body);
-      const { query, near, radiusKm, categories, limit } = body;
+      const { query, near, radiusKm = 10, categories, limit = 20 } = body;
 
       const apiKey = process.env.FOURSQUARE_API_KEY || "";
 
