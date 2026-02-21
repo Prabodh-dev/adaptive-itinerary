@@ -48,6 +48,26 @@ export interface GenerateItineraryResponse {
   itinerary: Itinerary;
 }
 
+export interface PlaceSearchResult {
+  providerPlaceId: string;
+  name: string;
+  lat: number;
+  lng: number;
+  category?: string;
+  address?: string;
+}
+
+export interface PlaceSearchRequest {
+  query: string;
+  near: { lat: number; lng: number };
+  radiusKm?: number;
+  limit?: number;
+}
+
+export interface PlaceSearchResponse {
+  places: PlaceSearchResult[];
+}
+
 export interface GetTripResponse {
   trip: Record<string, unknown>;
   activities: ActivityInput[];
@@ -68,4 +88,16 @@ export async function generateItinerary(tripId: string): Promise<GenerateItinera
 
 export async function getTrip(tripId: string): Promise<GetTripResponse> {
   return request<GetTripResponse>(`/trip/${tripId}`);
+}
+
+export async function searchPlaces(
+  query: string,
+  near: { lat: number; lng: number },
+  radiusKm: number = 5,
+  limit: number = 10
+): Promise<PlaceSearchResponse> {
+  return request<PlaceSearchResponse>("/places/search", {
+    method: "POST",
+    body: JSON.stringify({ query, near, radiusKm, limit }),
+  });
 }
