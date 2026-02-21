@@ -124,8 +124,16 @@ export interface SignalWeather {
   riskHours: string[];
 }
 
+export interface CrowdSignalItem {
+  placeId: string;
+  placeName: string;
+  busyNow: number;
+  peakHours: string[];
+}
+
 export interface SignalsResponse {
   weather: SignalWeather;
+  crowds: CrowdSignalItem[];
 }
 
 export interface Suggestion {

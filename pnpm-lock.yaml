@@ -53,13 +53,13 @@ importers:
         version: 3.18.1
       next:
         specifier: ^15.1.0
-        version: 15.5.12(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        version: 15.5.12(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react:
         specifier: ^19.0.0
-        version: 19.2.3
+        version: 19.2.4
       react-dom:
         specifier: ^19.0.0
-        version: 19.2.3(react@19.2.3)
+        version: 19.2.4(react@19.2.4)
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.0.0
@@ -1046,13 +1046,13 @@ packages:
   quickselect@3.0.0:
     resolution: {integrity: sha512-XdjUArbK4Bm5fLLvlm5KpTFOiOThgfWWI4axAZDWg4E/0mKdZyI9tNEfds27qCi1ze/vwTR16kvmmGhRra3c2g==}
 
-  react-dom@19.2.3:
-    resolution: {integrity: sha512-yELu4WmLPw5Mr/lmeEpox5rw3RETacE++JgHqQzd2dg+YbJuat3jH4ingc+WPZhxaoFzdv9y33G+F7Nl5O0GBg==}
+  react-dom@19.2.4:
+    resolution: {integrity: sha512-AXJdLo8kgMbimY95O2aKQqsz2iWi9jMgKJhRBAxECE4IFxfcazB2LmzloIoibJI3C12IlY20+KFaLv+71bUJeQ==}
     peerDependencies:
-      react: ^19.2.3
+      react: ^19.2.4
 
-  react@19.2.3:
-    resolution: {integrity: sha512-Ku/hhYbVjOQnXDZFv2+RibmLFGwFdeeKHFcOTlrt7xplBnya5OGn/hIRDsqDiSUcfORsDC7MPxwork8jBwsIWA==}
+  react@19.2.4:
+    resolution: {integrity: sha512-9nfp2hYpCwOjAN+8TZFGhtWEwgvWHXqESH8qT89AT/lWklpLON22Lc8pEtnpsZz7VmawabSU0gCjnj8aC0euHQ==}
     engines: {node: '>=0.10.0'}
 
   real-require@0.2.0:
@@ -1904,15 +1904,19 @@ snapshots:
 
   nanoid@5.1.6: {}
 
+<<<<<<< HEAD
   next@15.5.12(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+=======
+  next@15.5.12(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+>>>>>>> 6e4fb91 (wip: phase3 frontend complete)
     dependencies:
       '@next/env': 15.5.12
       '@swc/helpers': 0.5.15
       caniuse-lite: 1.0.30001770
       postcss: 8.4.31
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
-      styled-jsx: 5.1.6(react@19.2.3)
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+      styled-jsx: 5.1.6(react@19.2.4)
     optionalDependencies:
       '@next/swc-darwin-arm64': 15.5.12
       '@next/swc-darwin-x64': 15.5.12
@@ -1986,12 +1990,12 @@ snapshots:
 
   quickselect@3.0.0: {}
 
-  react-dom@19.2.3(react@19.2.3):
+  react-dom@19.2.4(react@19.2.4):
     dependencies:
-      react: 19.2.3
+      react: 19.2.4
       scheduler: 0.27.0
 
-  react@19.2.3: {}
+  react@19.2.4: {}
 
   real-require@0.2.0: {}
 
@@ -2085,10 +2089,14 @@ snapshots:
     dependencies:
       ansi-regex: 5.0.1
 
+<<<<<<< HEAD
   styled-jsx@5.1.6(react@19.2.3):
+=======
+  styled-jsx@5.1.6(react@19.2.4):
+>>>>>>> 6e4fb91 (wip: phase3 frontend complete)
     dependencies:
       client-only: 0.0.1
-      react: 19.2.3
+      react: 19.2.4
 
   supercluster@8.0.1:
     dependencies:
