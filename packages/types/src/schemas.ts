@@ -90,9 +90,9 @@ export const ItinerarySchema = z.object({
 });
 
 export const GenerateItineraryRequestSchema = z.object({
-  mode: z.enum(["driving", "walking", "transit"]).default("driving"),
+  mode: z.enum(["driving", "walking", "transit"]), // Required - no default
   startLocation: LatLngSchema.optional(),
-  optimizeOrder: z.boolean().default(true),
+  optimizeOrder: z.boolean().default(true), // Keep this default - optimization is recommended
 });
 
 export const GenerateItineraryResponseSchema = z.object({
@@ -119,9 +119,9 @@ export const GetTripResponseSchema = z.object({
 export const PlacesSearchRequestSchema = z.object({
   query: z.string().min(1),
   near: LatLngSchema,
-  radiusKm: z.number().positive().default(8),
+  radiusKm: z.number().positive().optional(), // Optional - let API or client decide
   categories: z.array(z.string()).optional(),
-  limit: z.number().int().positive().max(50).default(20),
+  limit: z.number().int().positive().max(50).optional(), // Optional - let API or client decide
 });
 
 export const PlacesSearchResponseSchema = z.object({

@@ -25,7 +25,16 @@ export interface CreateTripResponse {
 }
 
 export interface ActivityInput {
-  place: { name: string; lat: number; lng: number };
+  place: {
+    provider: string;
+    providerPlaceId: string;
+    name: string;
+    lat: number;
+    lng: number;
+    category?: string;
+    isIndoor?: boolean;
+    address?: string;
+  };
   durationMin: number;
   locked: boolean;
 }
@@ -48,10 +57,36 @@ export interface GenerateItineraryResponse {
   itinerary: Itinerary;
 }
 
+export interface PlaceSearchResult {
+  provider: string;
+  providerPlaceId: string;
+  name: string;
+  lat: number;
+  lng: number;
+  category?: string;
+  isIndoor?: boolean;
+  address?: string;
+}
+
+export interface PlaceSearchRequest {
+  query: string;
+  near: { lat: number; lng: number };
+  radiusKm?: number;
+  limit?: number;
+}
+
+export interface PlaceSearchResponse {
+  places: PlaceSearchResult[];
+}
+
 export interface GetTripResponse {
   trip: Record<string, unknown>;
   activities: ActivityInput[];
-  itinerary: Itinerary | null;
+  latestItinerary?: {
+    version: number;
+    itinerary: Itinerary;
+    generatedAt: string;
+  };
 }
 
 export async function createTrip(data: CreateTripRequest): Promise<CreateTripResponse> {
@@ -62,10 +97,22 @@ export async function addActivities(tripId: string, activities: ActivityInput[])
   await request(`/trip/${tripId}/activities`, { method: "POST", body: JSON.stringify({ activities }) });
 }
 
-export async function generateItinerary(tripId: string): Promise<GenerateItineraryResponse> {
-  return request<GenerateItineraryResponse>(`/trip/${tripId}/itinerary/generate`, { method: "POST" });
+export async function generateItinerary(tripId: string, mode: "driving" | "walking" | "transit"): Promise<GenerateItineraryResponse> {
+  return request<GenerateItineraryResponse>(`/trip/${tripId}/itinerary/generate`, { method: "POST", body: JSON.stringify({ mode }) });
 }
 
 export async function getTrip(tripId: string): Promise<GetTripResponse> {
   return request<GetTripResponse>(`/trip/${tripId}`);
+}
+
+export async function searchPlaces(
+  query: string,
+  near: { lat: number; lng: number },
+  radiusKm: number = 5,
+  limit: number = 10
+): Promise<PlaceSearchResponse> {
+  return request<PlaceSearchResponse>("/places/search", {
+    method: "POST",
+    body: JSON.stringify({ query, near, radiusKm, limit }),
+  });
 }

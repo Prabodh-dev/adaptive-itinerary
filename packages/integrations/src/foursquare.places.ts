@@ -1,23 +1,21 @@
 import type { Place } from "@adaptive/types";
 
 /**
- * Foursquare Places API v3 response types
+ * Foursquare Places API (new format) response types
  */
 interface FoursquarePlace {
-  fsq_id: string;
+  fsq_place_id: string;
   name: string;
-  geocodes: {
-    main: {
-      latitude: number;
-      longitude: number;
-    };
-  };
+  latitude: number;
+  longitude: number;
   location?: {
     formatted_address?: string;
   };
   categories?: Array<{
-    id: number;
+    fsq_category_id: string;
     name: string;
+    short_name: string;
+    plural_name: string;
   }>;
 }
 
@@ -26,7 +24,7 @@ interface FoursquareSearchResponse {
 }
 
 /**
- * Search for places using Foursquare Places API v3
+ * Search for places using Foursquare Places API (new endpoint)
  * @param query - Search query (e.g., "coffee shops", "museums")
  * @param near - Latitude and longitude to search near
  * @param radiusKm - Search radius in kilometers (default 8km)
@@ -59,14 +57,15 @@ export async function searchPlacesFoursquare(
     params.append("categories", categories.join(","));
   }
 
-  const url = `https://api.foursquare.com/v3/places/search?${params.toString()}`;
+  const url = `https://places-api.foursquare.com/places/search?${params.toString()}`;
 
   try {
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        Authorization: apiKey,
+        Authorization: `Bearer ${apiKey}`,
         Accept: "application/json",
+        "X-Places-Api-Version": "2025-06-17",
       },
     });
 
@@ -82,10 +81,10 @@ export async function searchPlacesFoursquare(
     return data.results.map((fsPlace) => {
       const place: Place = {
         provider: "foursquare",
-        providerPlaceId: fsPlace.fsq_id,
+        providerPlaceId: fsPlace.fsq_place_id,
         name: fsPlace.name,
-        lat: fsPlace.geocodes.main.latitude,
-        lng: fsPlace.geocodes.main.longitude,
+        lat: fsPlace.latitude,
+        lng: fsPlace.longitude,
       };
 
       // Optional fields

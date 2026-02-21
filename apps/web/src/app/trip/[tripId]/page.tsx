@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { getTrip, type GetTripResponse } from "@/api/client";
 import Timeline from "@/components/Timeline";
+import MapView from "@/components/MapView";
 
 export default function TripDashboardPage() {
   const params = useParams<{ tripId: string }>();
@@ -55,9 +56,18 @@ export default function TripDashboardPage() {
         </section>
       )}
 
-      <section>
+      <section className="mb-8">
         <h2 className="mb-2 text-lg font-semibold">Itinerary</h2>
-        {data.itinerary ? <Timeline itinerary={data.itinerary} /> : <p className="text-gray-500 text-sm">No itinerary generated yet.</p>}
+        {data.latestItinerary ? <Timeline itinerary={data.latestItinerary.itinerary} /> : <p className="text-gray-500 text-sm">No itinerary generated yet.</p>}
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-lg font-semibold">Map</h2>
+        {data.activities && data.activities.length > 0 ? (
+          <MapView activities={data.activities} accessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN} />
+        ) : (
+          <p className="text-gray-500 text-sm">Add activities to see them on the map.</p>
+        )}
       </section>
     </main>
   );
