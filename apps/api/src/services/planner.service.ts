@@ -42,10 +42,10 @@ export async function generateItinerary(
     try {
       // Build duration matrix using Mapbox
       const coordinates = buildCoordinateList(activities, startLocation);
-      const profile = getMapboxProfile(
-        mode,
-        process.env.MAPBOX_DEFAULT_PROFILE || "mapbox/driving"
-      );
+      
+      // Choose profile based on mode
+      const trafficProfile = process.env.MAPBOX_TRAFFIC_PROFILE || "mapbox/driving-traffic";
+      const profile = getMapboxProfile(mode, trafficProfile);
 
       durationMatrix = await getDurationMatrixMapbox(profile, coordinates, mapboxToken);
 

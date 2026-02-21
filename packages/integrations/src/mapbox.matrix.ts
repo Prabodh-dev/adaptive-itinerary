@@ -14,7 +14,7 @@ interface MapboxMatrixResponse {
 
 /**
  * Get travel duration matrix using Mapbox Matrix API
- * @param profile - Routing profile (e.g., "mapbox/driving", "mapbox/walking")
+ * @param profile - Routing profile (e.g., "mapbox/driving", "mapbox/walking", "mapbox/driving-traffic")
  * @param coordinates - Array of [lng, lat] coordinates
  * @param accessToken - Mapbox access token
  * @returns Duration matrix in seconds (sources x destinations)
@@ -36,12 +36,22 @@ export async function getDurationMatrixMapbox(
     throw new Error("Mapbox Matrix API supports a maximum of 25 coordinates");
   }
 
+  // IMPORTANT: driving-traffic profile has a lower limit (10 coords) than other profiles (25 coords)
+  // If using driving-traffic with more than 10 coords, fallback to standard driving
+  let actualProfile = profile;
+  if (profile === "mapbox/driving-traffic" && coordinates.length > 10) {
+    console.log(
+      `Mapbox: falling back from driving-traffic to driving (${coordinates.length} coords > 10)`
+    );
+    actualProfile = "mapbox/driving";
+  }
+
   // Format coordinates as "lng,lat;lng,lat;..." (note: lng comes first!)
   const coordsString = coordinates
     .map((coord) => `${coord.lng},${coord.lat}`)
     .join(";");
 
-  const url = `https://api.mapbox.com/directions-matrix/v1/${profile}/${coordsString}?annotations=duration&access_token=${accessToken}`;
+  const url = `https://api.mapbox.com/directions-matrix/v1/${actualProfile}/${coordsString}?annotations=duration&access_token=${accessToken}`;
 
   console.log("Mapbox API URL:", url.substring(0, 100) + "...");
 
@@ -78,20 +88,24 @@ export async function getDurationMatrixMapbox(
 
 /**
  * Helper function to get valid Mapbox profile from mode
+ * @param mode - Travel mode (walking, driving, transit)
+ * @param trafficProfile - Optional traffic-aware profile (e.g., "mapbox/driving-traffic")
+ * @returns Mapbox profile string
  */
 export function getMapboxProfile(
   mode: "driving" | "walking" | "transit",
-  defaultProfile: string = "mapbox/driving"
+  trafficProfile: string = "mapbox/driving-traffic"
 ): string {
   switch (mode) {
     case "driving":
-      return "mapbox/driving";
+      // Prefer traffic-aware profile for driving
+      return trafficProfile || "mapbox/driving-traffic";
     case "walking":
       return "mapbox/walking";
     case "transit":
-      // Mapbox doesn't have a transit profile, fallback to driving or use custom
-      return defaultProfile.includes("transit") ? "mapbox/driving" : defaultProfile;
+      // Mapbox doesn't have a transit profile, use driving as baseline
+      return "mapbox/driving";
     default:
-      return defaultProfile;
+      return "mapbox/driving";
   }
 }

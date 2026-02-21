@@ -14,10 +14,9 @@ config({ path: resolve(__dirname, "../../../.env") });
 import { 
   besttimeNewForecast, 
   besttimeLive,
-  fetchGtfsRt,
-  extractAlerts,
-  extractTripUpdateDelays,
-  mergeAlerts
+  transitlandFindStopsNear,
+  transitlandGetDepartures,
+  extractTransitAlertsFromDepartures
 } from "@adaptive/integrations";
 
 const API_BASE_URL = process.env.API_URL || "http://localhost:8080";
@@ -35,14 +34,26 @@ const MAX_CROWD_VENUES_PER_TRIP = parseInt(
   process.env.MAX_CROWD_VENUES_PER_TRIP || "8",
   10
 );
-const GTFSRT_TRIPUPDATES_URL = process.env.GTFSRT_TRIPUPDATES_URL || "";
-const GTFSRT_ALERTS_URL = process.env.GTFSRT_ALERTS_URL || "";
+const TRANSITLAND_API_KEY = process.env.TRANSITLAND_API_KEY || "";
+const TRANSITLAND_BASE_URL = process.env.TRANSITLAND_BASE_URL || "https://transit.land/api/v2/rest";
 const TRANSIT_POLL_INTERVAL_SEC = parseInt(
   process.env.TRANSIT_POLL_INTERVAL_SEC || "180",
   10
 );
 const TRANSIT_DELAY_THRESHOLD_MIN = parseInt(
   process.env.TRANSIT_DELAY_THRESHOLD_MIN || "10",
+  10
+);
+const TRANSIT_STOPS_RADIUS_M = parseInt(
+  process.env.TRANSIT_STOPS_RADIUS_M || "800",
+  10
+);
+const TRANSIT_MAX_STOPS = parseInt(
+  process.env.TRANSIT_MAX_STOPS || "3",
+  10
+);
+const TRANSIT_NEXT_SECONDS = parseInt(
+  process.env.TRANSIT_NEXT_SECONDS || "3600",
   10
 );
 
@@ -530,14 +541,19 @@ async function pollCrowds(): Promise<void> {
 }
 
 // ============================================================================
-// Transit Polling Loop (GTFS-Realtime)
+// Transit Polling Loop (Transitland)
 // ============================================================================
 
 /**
- * Poll GTFS-Realtime feeds for transit delays and alerts
+ * Poll Transitland for transit delays and alerts
  */
 async function pollTransit(): Promise<void> {
-  console.log("[Transit] Polling transit data...");
+  console.log("[Transit] Polling transit data via Transitland...");
+
+  if (!TRANSITLAND_API_KEY) {
+    console.warn("[Transit] TRANSITLAND_API_KEY not set, skipping transit polling");
+    return;
+  }
 
   try {
     const tripIds = await fetchTripIds();
@@ -548,67 +564,98 @@ async function pollTransit(): Promise<void> {
       return;
     }
 
-    // Fetch trip updates if URL is set
-    let tripUpdateAlerts: any[] = [];
-    if (GTFSRT_TRIPUPDATES_URL) {
-      console.log("[Transit] Fetching trip updates feed...");
-      const tripUpdateFeed = await fetchGtfsRt(GTFSRT_TRIPUPDATES_URL);
-      if (tripUpdateFeed) {
-        tripUpdateAlerts = extractTripUpdateDelays(tripUpdateFeed);
-        console.log(`[Transit] Extracted ${tripUpdateAlerts.length} delays from trip updates`);
-      } else {
-        console.log("[Transit] Trip updates feed returned no data");
-      }
-    }
-
-    // Fetch alerts if URL is set
-    let serviceAlerts: any[] = [];
-    if (GTFSRT_ALERTS_URL) {
-      console.log("[Transit] Fetching service alerts feed...");
-      const alertsFeed = await fetchGtfsRt(GTFSRT_ALERTS_URL);
-      if (alertsFeed) {
-        serviceAlerts = extractAlerts(alertsFeed);
-        console.log(`[Transit] Extracted ${serviceAlerts.length} service alerts`);
-      } else {
-        console.log("[Transit] Service alerts feed returned no data");
-      }
-    }
-
-    // Combine and merge alerts (keep top 5)
-    const combinedAlerts = mergeAlerts([...tripUpdateAlerts, ...serviceAlerts], 5);
-
-    if (combinedAlerts.length === 0) {
-      console.log("[Transit] No significant transit alerts found");
-      // Still post empty alerts to clear old data
-    }
-
-    // Post transit signals to each trip
+    // Process each trip
     for (const tripId of tripIds) {
       try {
-        const response = await fetch(
-          `${API_BASE_URL}/internal/trip/${tripId}/signals/transit`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              observedAt: new Date().toISOString(),
-              transit: {
-                alerts: combinedAlerts,
-              },
-            }),
-          }
-        );
+        // Get trip data to determine location
+        const tripData = await fetchTripData(tripId);
+        if (!tripData || !tripData.trip) {
+          console.warn(`[Transit][${tripId}] Failed to fetch trip data`);
+          continue;
+        }
 
-        if (!response.ok) {
-          console.error(
-            `[Transit][${tripId}] Failed to post transit signals: ${response.status}`
-          );
+        // Determine reference coordinates for transit stop search
+        let refLat: number | null = null;
+        let refLon: number | null = null;
+
+        // Option 1: Use startLocation if stored (would need to add this to trip schema)
+        // For now, use first activity location as reference
+        if (tripData.activities && tripData.activities.length > 0) {
+          const firstActivity = tripData.activities[0];
+          refLat = firstActivity.place.lat;
+          refLon = firstActivity.place.lon;
+        }
+
+        if (refLat === null || refLon === null) {
+          console.warn(`[Transit][${tripId}] No location available for transit search`);
           continue;
         }
 
         console.log(
-          `[Transit][${tripId}] Posted ${combinedAlerts.length} transit alerts`
+          `[Transit][${tripId}] Searching for stops near ${refLat.toFixed(4)}, ${refLon.toFixed(4)}`
         );
+
+        // Find nearby transit stops
+        const stops = await transitlandFindStopsNear({
+          lat: refLat,
+          lon: refLon,
+          radiusM: TRANSIT_STOPS_RADIUS_M,
+          limit: TRANSIT_MAX_STOPS,
+          apiKey: TRANSITLAND_API_KEY,
+          baseUrl: TRANSITLAND_BASE_URL,
+        });
+
+        if (stops.length === 0) {
+          console.log(`[Transit][${tripId}] No transit stops found nearby`);
+          // Post empty alerts
+          await postTransitSignals(tripId, []);
+          continue;
+        }
+
+        console.log(`[Transit][${tripId}] Found ${stops.length} nearby stops`);
+
+        // Collect alerts from all nearby stops
+        const allAlerts: Array<{ line: string; delayMin: number; message: string }> = [];
+
+        for (const stop of stops) {
+          try {
+            console.log(`[Transit][${tripId}] Fetching departures for stop: ${stop.stop_name}`);
+            
+            const departuresResponse = await transitlandGetDepartures({
+              stopKey: stop.stop_key,
+              nextSeconds: TRANSIT_NEXT_SECONDS,
+              includeAlerts: true,
+              apiKey: TRANSITLAND_API_KEY,
+              baseUrl: TRANSITLAND_BASE_URL,
+            });
+
+            const alerts = extractTransitAlertsFromDepartures(departuresResponse);
+            allAlerts.push(...alerts);
+
+            console.log(`[Transit][${tripId}] Extracted ${alerts.length} alerts from ${stop.stop_name}`);
+          } catch (error) {
+            console.error(`[Transit][${tripId}] Error fetching departures for stop ${stop.stop_key}:`, error);
+          }
+        }
+
+        // Merge and deduplicate alerts by line
+        const alertsByLine = new Map<string, { line: string; delayMin: number; message: string }>();
+        for (const alert of allAlerts) {
+          const existing = alertsByLine.get(alert.line);
+          if (!existing || alert.delayMin > existing.delayMin) {
+            alertsByLine.set(alert.line, alert);
+          }
+        }
+
+        // Sort by delay and keep top 5
+        const finalAlerts = Array.from(alertsByLine.values())
+          .sort((a, b) => b.delayMin - a.delayMin)
+          .slice(0, 5);
+
+        console.log(`[Transit][${tripId}] Final: ${finalAlerts.length} unique alerts`);
+
+        // Post transit signals
+        await postTransitSignals(tripId, finalAlerts);
 
         // Trigger recompute
         const recomputeResp = await fetch(
@@ -624,13 +671,51 @@ async function pollTransit(): Promise<void> {
           console.log(`[Transit][${tripId}] Recompute triggered`);
         }
       } catch (error) {
-        console.error(`[Transit][${tripId}] Error posting signals:`, error);
+        console.error(`[Transit][${tripId}] Error processing trip:`, error);
       }
     }
 
     console.log("[Transit] Polling cycle complete");
   } catch (error) {
     console.error("[Transit] Error during polling cycle:", error);
+  }
+}
+
+/**
+ * Post transit signals to API
+ */
+async function postTransitSignals(
+  tripId: string,
+  alerts: Array<{ line: string; delayMin: number; message: string }>
+): Promise<void> {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/internal/trip/${tripId}/signals/transit`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          observedAt: new Date().toISOString(),
+          transit: {
+            alerts,
+          },
+          raw: {
+            source: "transitland",
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      console.error(
+        `[Transit][${tripId}] Failed to post transit signals: ${response.status}`
+      );
+      return;
+    }
+
+    console.log(`[Transit][${tripId}] Posted ${alerts.length} transit alerts`);
+  } catch (error) {
+    console.error(`[Transit][${tripId}] Error posting signals:`, error);
   }
 }
 
@@ -651,8 +736,8 @@ async function start() {
   // Crowd polling is optional
   const crowdEnabled = !!BESTTIME_API_KEY_PRIVATE;
   
-  // Transit polling is optional (enabled if at least one feed URL is set)
-  const transitEnabled = !!(GTFSRT_TRIPUPDATES_URL || GTFSRT_ALERTS_URL);
+  // Transit polling is optional (enabled if API key is set)
+  const transitEnabled = !!TRANSITLAND_API_KEY;
 
   console.log(`API URL: ${API_BASE_URL}`);
   console.log(`Weather poll interval: ${WEATHER_POLL_INTERVAL_SEC}s`);
@@ -662,7 +747,7 @@ async function start() {
     `Crowd detection: ${crowdEnabled ? "✓ ENABLED (BestTime real API)" : "✗ DISABLED (BESTTIME_API_KEY_PRIVATE not set)"}`
   );
   console.log(
-    `Transit monitoring: ${transitEnabled ? "✓ ENABLED (GTFS-Realtime)" : "✗ DISABLED (no GTFS-RT feed URLs set)"}`
+    `Transit monitoring: ${transitEnabled ? "✓ ENABLED (Transitland)" : "✗ DISABLED (TRANSITLAND_API_KEY not set)"}`
   );
 
   if (crowdEnabled) {
@@ -671,12 +756,9 @@ async function start() {
   
   if (transitEnabled) {
     console.log(`Transit delay threshold: ${TRANSIT_DELAY_THRESHOLD_MIN} minutes`);
-    if (GTFSRT_TRIPUPDATES_URL) {
-      console.log(`Trip updates feed: ${GTFSRT_TRIPUPDATES_URL.substring(0, 50)}...`);
-    }
-    if (GTFSRT_ALERTS_URL) {
-      console.log(`Service alerts feed: ${GTFSRT_ALERTS_URL.substring(0, 50)}...`);
-    }
+    console.log(`Transit stops search radius: ${TRANSIT_STOPS_RADIUS_M}m`);
+    console.log(`Max stops per trip: ${TRANSIT_MAX_STOPS}`);
+    console.log(`Transitland base URL: ${TRANSITLAND_BASE_URL}`);
   }
 
   // Wait for API server to be ready
