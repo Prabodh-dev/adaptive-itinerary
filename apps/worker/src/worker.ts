@@ -1,7 +1,16 @@
 /**
  * Weather and Crowd Worker - Polls weather and crowd data and updates API
  */
-import "dotenv/config";
+import { config } from "dotenv";
+import { resolve } from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+// Load .env from project root (2 levels up from this file)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+config({ path: resolve(__dirname, "../../../.env") });
+
 import { besttimeNewForecast, besttimeLive } from "@adaptive/integrations";
 
 const API_BASE_URL = process.env.API_URL || "http://localhost:8080";

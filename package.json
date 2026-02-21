@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@9",
   "scripts": {
-    "dev": "concurrently --kill-others-on-fail \"pnpm --filter @adaptive/api dev\" \"pnpm --filter @adaptive/web dev\" \"pnpm --filter @adaptive/worker dev\"",
+    "dev": "concurrently --kill-others-on-fail --names \"API,WEB,WORKER\" --prefix-colors \"blue,magenta,green\" \"pnpm --filter @adaptive/api dev\" \"pnpm --filter @adaptive/web dev\" \"pnpm --filter @adaptive/worker dev\"",
     "dev:api": "pnpm --filter @adaptive/api dev",
     "dev:web": "pnpm --filter @adaptive/web dev",
     "dev:worker": "pnpm --filter @adaptive/worker dev"
