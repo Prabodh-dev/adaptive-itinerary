@@ -7,6 +7,7 @@ import type {
   Activity,
   ActivityInput,
   Itinerary,
+  ItineraryItem,
   CreateTripRequest,
   Suggestion,
   CrowdSignalItem,
@@ -264,6 +265,7 @@ export function getTransitSignals(tripId: string): TransitSignalRecord | null {
 
 /**
  * Add a suggestion for a trip
+ * Prevents duplicate suggestions based on kind and beforePlan items
  */
 export function addSuggestion(tripId: string, suggestion: Suggestion): void {
   if (!trips.has(tripId)) {
@@ -271,6 +273,23 @@ export function addSuggestion(tripId: string, suggestion: Suggestion): void {
   }
 
   const tripSuggestions = suggestions.get(tripId) || [];
+
+  // Check for duplicate: same kind and same beforePlan items
+  const isDuplicate = tripSuggestions.some((existing) => {
+    if (existing.kind !== suggestion.kind) return false;
+    if (existing.beforePlan.items.length !== suggestion.beforePlan.items.length) return false;
+    
+    const existingIds = existing.beforePlan.items.map((i: ItineraryItem) => i.activityId).join(",");
+    const newIds = suggestion.beforePlan.items.map((i: ItineraryItem) => i.activityId).join(",");
+    
+    return existingIds === newIds;
+  });
+
+  if (isDuplicate) {
+    console.log(`[Store] Skipping duplicate suggestion of kind: ${suggestion.kind}`);
+    return;
+  }
+
   tripSuggestions.push(suggestion);
   suggestions.set(tripId, tripSuggestions);
 }

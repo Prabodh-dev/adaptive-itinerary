@@ -62,18 +62,30 @@ function findRiskyOutdoorActivities(
 
 /**
  * Reorder itinerary to move outdoor activities earlier
+ * Respects locked activities - locked items stay in their relative positions
  */
 function reorderToAvoidRain(
   itineraryItems: ItineraryItem[],
-  riskyActivities: { item: ItineraryItem; activity: Activity }[]
+  riskyActivities: { item: ItineraryItem; activity: Activity }[],
+  lockedIds: Set<string>
 ): ItineraryItem[] {
   const riskyIds = new Set(riskyActivities.map((r) => r.item.activityId));
 
-  // Split into safe outdoor (move first) and rest
+  const lockedItems: ItineraryItem[] = [];
+  const nonLockedItems: ItineraryItem[] = [];
+
+  for (const item of itineraryItems) {
+    if (lockedIds.has(item.activityId)) {
+      lockedItems.push(item);
+    } else {
+      nonLockedItems.push(item);
+    }
+  }
+
   const safeOutdoor: ItineraryItem[] = [];
   const rest: ItineraryItem[] = [];
 
-  for (const item of itineraryItems) {
+  for (const item of nonLockedItems) {
     if (riskyIds.has(item.activityId)) {
       safeOutdoor.push(item);
     } else {
@@ -81,8 +93,21 @@ function reorderToAvoidRain(
     }
   }
 
-  // Reorder: safe outdoor first, then rest
-  return [...safeOutdoor, ...rest];
+  const reorderedNonLocked = [...safeOutdoor, ...rest];
+  
+  const result: ItineraryItem[] = [];
+  let lockedIdx = 0;
+  let nonLockedIdx = 0;
+
+  for (const item of itineraryItems) {
+    if (lockedIds.has(item.activityId)) {
+      result.push(lockedItems[lockedIdx++]);
+    } else {
+      result.push(reorderedNonLocked[nonLockedIdx++]);
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -117,6 +142,11 @@ export function buildWeatherSuggestion(
     return null;
   }
 
+  // Respect locked activities
+  const lockedIds = new Set(
+    activities.filter((a) => a.locked).map((a) => a.activityId)
+  );
+
   // Build suggestion
   const suggestionId = `sug_${nanoid(12)}`;
 
@@ -132,8 +162,8 @@ export function buildWeatherSuggestion(
     "Moved outdoor stops earlier to avoid rain",
   ];
 
-  // Reorder itinerary
-  const afterPlanItems = reorderToAvoidRain(latestItinerary.items, riskyActivities);
+  // Reorder itinerary (respecting locked activities)
+  const afterPlanItems = reorderToAvoidRain(latestItinerary.items, riskyActivities, lockedIds);
 
   const suggestion: Suggestion = {
     suggestionId,
@@ -216,19 +246,30 @@ function findCrowdedActivities(
 
 /**
  * Reorder itinerary to move crowded activities earlier
- * Respects locked activities
+ * Respects locked activities - locked items stay in their relative positions
  */
 function reorderToAvoidCrowds(
   itineraryItems: ItineraryItem[],
-  crowdedActivities: { item: ItineraryItem; activity: Activity; crowdData: CrowdSignalItem }[]
+  crowdedActivities: { item: ItineraryItem; activity: Activity; crowdData: CrowdSignalItem }[],
+  lockedIds: Set<string>
 ): ItineraryItem[] {
   const crowdedIds = new Set(crowdedActivities.map((c) => c.item.activityId));
 
-  // Split into crowded (move first) and rest
+  const lockedItems: ItineraryItem[] = [];
+  const nonLockedItems: ItineraryItem[] = [];
+
+  for (const item of itineraryItems) {
+    if (lockedIds.has(item.activityId)) {
+      lockedItems.push(item);
+    } else {
+      nonLockedItems.push(item);
+    }
+  }
+
   const crowdedItems: ItineraryItem[] = [];
   const rest: ItineraryItem[] = [];
 
-  for (const item of itineraryItems) {
+  for (const item of nonLockedItems) {
     if (crowdedIds.has(item.activityId)) {
       crowdedItems.push(item);
     } else {
@@ -236,8 +277,21 @@ function reorderToAvoidCrowds(
     }
   }
 
-  // Reorder: crowded items first (visit earlier to avoid crowds), then rest
-  return [...crowdedItems, ...rest];
+  const reorderedNonLocked = [...crowdedItems, ...rest];
+  
+  const result: ItineraryItem[] = [];
+  let lockedIdx = 0;
+  let nonLockedIdx = 0;
+
+  for (const item of itineraryItems) {
+    if (lockedIds.has(item.activityId)) {
+      result.push(lockedItems[lockedIdx++]);
+    } else {
+      result.push(reorderedNonLocked[nonLockedIdx++]);
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -272,6 +326,11 @@ export function buildCrowdSuggestion(
     return null;
   }
 
+  // Respect locked activities
+  const lockedIds = new Set(
+    activities.filter((a) => a.locked).map((a) => a.activityId)
+  );
+
   // Build suggestion
   const suggestionId = `sug_${nanoid(12)}`;
 
@@ -294,8 +353,8 @@ export function buildCrowdSuggestion(
   
   reasons.push("Shifted crowded stops earlier to avoid peak hours");
 
-  // Reorder itinerary
-  const afterPlanItems = reorderToAvoidCrowds(latestItinerary.items, crowdedActivities);
+  // Reorder itinerary (respecting locked activities)
+  const afterPlanItems = reorderToAvoidCrowds(latestItinerary.items, crowdedActivities, lockedIds);
 
   const suggestion: Suggestion = {
     suggestionId,
