@@ -74,7 +74,7 @@ interface Activity {
   place: {
     name: string;
     lat: number;
-    lon: number;
+    lng: number;  // Changed from 'lon' to 'lng' to match API response
     providerPlaceId?: string;
     category?: string;
     isIndoor?: boolean;
@@ -583,7 +583,7 @@ async function pollTransit(): Promise<void> {
         if (tripData.activities && tripData.activities.length > 0) {
           const firstActivity = tripData.activities[0];
           refLat = firstActivity.place.lat;
-          refLon = firstActivity.place.lon;
+          refLon = firstActivity.place.lng;  // Changed from 'lon' to 'lng'
         }
 
         if (refLat === null || refLon === null) {
