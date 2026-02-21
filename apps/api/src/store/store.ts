@@ -9,6 +9,7 @@ import type {
   Itinerary,
   CreateTripRequest,
   Suggestion,
+  CrowdSignalItem,
 } from "@adaptive/types";
 
 // Internal record types
@@ -35,11 +36,18 @@ export interface WeatherSignalRecord {
   raw?: any;
 }
 
+export interface CrowdSignalRecord {
+  observedAt: string;
+  crowds: CrowdSignalItem[];
+  raw?: any;
+}
+
 // In-memory stores
 const trips = new Map<string, TripRecord>();
 const activities = new Map<string, ActivityRecord[]>();
 const itineraries = new Map<string, ItineraryVersionRecord[]>();
 const weatherSignals = new Map<string, WeatherSignalRecord>();
+const crowdSignals = new Map<string, CrowdSignalRecord>();
 const suggestions = new Map<string, Suggestion[]>();
 
 /**
@@ -194,6 +202,31 @@ export function upsertWeatherSignal(
  */
 export function getWeatherSignal(tripId: string): WeatherSignalRecord | null {
   return weatherSignals.get(tripId) || null;
+}
+
+/**
+ * Upsert crowd signals for a trip
+ */
+export function upsertCrowdSignals(
+  tripId: string,
+  data: { observedAt: string; crowds: CrowdSignalItem[]; raw?: any }
+): void {
+  if (!trips.has(tripId)) {
+    throw new Error(`Trip ${tripId} not found`);
+  }
+
+  crowdSignals.set(tripId, {
+    observedAt: data.observedAt,
+    crowds: data.crowds,
+    raw: data.raw,
+  });
+}
+
+/**
+ * Get crowd signals for a trip
+ */
+export function getCrowdSignals(tripId: string): CrowdSignalRecord | null {
+  return crowdSignals.get(tripId) || null;
 }
 
 /**

@@ -135,10 +135,6 @@ export const SignalWeatherSchema = z.object({
   riskHours: z.array(z.string()),
 });
 
-export const SignalsResponseSchema = z.object({
-  weather: SignalWeatherSchema,
-});
-
 export const UpsertWeatherSignalRequestSchema = z.object({
   observedAt: z.string(),
   weather: z.object({
@@ -146,6 +142,26 @@ export const UpsertWeatherSignalRequestSchema = z.object({
     riskHours: z.array(z.string()),
   }),
   raw: z.any().optional(),
+});
+
+// ===== Crowd Signal Schemas =====
+
+export const CrowdSignalItemSchema = z.object({
+  placeId: z.string(),
+  placeName: z.string(),
+  busyNow: z.number().min(0).max(100),
+  peakHours: z.array(z.string()),
+});
+
+export const UpsertCrowdSignalRequestSchema = z.object({
+  observedAt: z.string(),
+  crowds: z.array(CrowdSignalItemSchema),
+  raw: z.any().optional(),
+});
+
+export const SignalsResponseSchema = z.object({
+  weather: SignalWeatherSchema,
+  crowds: z.array(CrowdSignalItemSchema),
 });
 
 // ===== Suggestion Schemas =====
@@ -183,8 +199,10 @@ export type GetTripResponse = z.infer<typeof GetTripResponseSchema>;
 export type PlacesSearchRequest = z.infer<typeof PlacesSearchRequestSchema>;
 export type PlacesSearchResponse = z.infer<typeof PlacesSearchResponseSchema>;
 export type SignalWeather = z.infer<typeof SignalWeatherSchema>;
-export type SignalsResponse = z.infer<typeof SignalsResponseSchema>;
 export type UpsertWeatherSignalRequest = z.infer<typeof UpsertWeatherSignalRequestSchema>;
+export type CrowdSignalItem = z.infer<typeof CrowdSignalItemSchema>;
+export type UpsertCrowdSignalRequest = z.infer<typeof UpsertCrowdSignalRequestSchema>;
+export type SignalsResponse = z.infer<typeof SignalsResponseSchema>;
 export type Suggestion = z.infer<typeof SuggestionSchema>;
 export type ListSuggestionsResponse = z.infer<typeof ListSuggestionsResponseSchema>;
 

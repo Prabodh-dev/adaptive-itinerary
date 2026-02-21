@@ -1,12 +1,17 @@
 /**
- * Weather Worker - Polls weather data and updates API
+ * Weather and Crowd Worker - Polls weather and crowd data and updates API
  */
 import "dotenv/config";
 
 const API_BASE_URL = process.env.API_URL || "http://localhost:8080";
 const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
-const POLL_INTERVAL_SEC = parseInt(
+const BESTTIME_API_KEY = process.env.BESTTIME_API_KEY;
+const WEATHER_POLL_INTERVAL_SEC = parseInt(
   process.env.WEATHER_POLL_INTERVAL_SEC || "120",
+  10
+);
+const CROWD_POLL_INTERVAL_SEC = parseInt(
+  process.env.CROWD_POLL_INTERVAL_SEC || "180",
   10
 );
 
@@ -24,6 +29,7 @@ interface Activity {
     name: string;
     lat: number;
     lon: number;
+    providerPlaceId?: string;
   };
 }
 
@@ -251,24 +257,226 @@ async function processTrip(tripId: string): Promise<void> {
 }
 
 /**
- * Main polling loop
+ * Fetch crowd data from BestTime-like API (with fallback)
+ */
+async function fetchCrowdData(
+  name: string,
+  lat: number,
+  lng: number,
+  address?: string
+): Promise<{ busyNow: number; peakHours: string[]; raw: any }> {
+  // If no API key, use fallback
+  if (!BESTTIME_API_KEY || BESTTIME_API_KEY.trim() === "") {
+    return generateFallbackCrowdData();
+  }
+
+  try {
+    const body = {
+      api_key_private: BESTTIME_API_KEY,
+      venue_name: name,
+      venue_address: address || `${lat},${lng}`,
+    };
+
+    const response = await fetch("https://besttime.app/api/v1/forecasts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      console.warn(`BestTime API returned ${response.status}, using fallback`);
+      return generateFallbackCrowdData();
+    }
+
+    const data = await response.json();
+    return {
+      busyNow: extractBusyNow(data),
+      peakHours: extractPeakHours(data),
+      raw: data,
+    };
+  } catch (error) {
+    console.warn("Failed to fetch BestTime data, using fallback:", error);
+    return generateFallbackCrowdData();
+  }
+}
+
+function extractBusyNow(data: any): number {
+  try {
+    if (typeof data?.analysis?.venue_forecasted_busyness === "number") {
+      return Math.min(100, Math.max(0, data.analysis.venue_forecasted_busyness));
+    }
+    return Math.floor(Math.random() * 61) + 20; // 20-80
+  } catch {
+    return Math.floor(Math.random() * 61) + 20;
+  }
+}
+
+function extractPeakHours(data: any): string[] {
+  try {
+    const analysis = data?.analysis;
+    if (!Array.isArray(analysis?.hour_analysis)) {
+      return ["17:00", "18:00"];
+    }
+
+    const currentDay = new Date().getDay();
+    const peakHours: string[] = [];
+
+    for (const hourData of analysis.hour_analysis) {
+      if (hourData.day_int === currentDay && (hourData.intensity_nr || 0) >= 75) {
+        const hour = String(hourData.hour).padStart(2, "0");
+        peakHours.push(`${hour}:00`);
+      }
+    }
+
+    return peakHours.length > 0 ? peakHours : ["17:00", "18:00"];
+  } catch {
+    return ["17:00", "18:00"];
+  }
+}
+
+function generateFallbackCrowdData(): { busyNow: number; peakHours: string[]; raw: any } {
+  return {
+    busyNow: Math.floor(Math.random() * 61) + 20, // 20-80
+    peakHours: ["17:00", "18:00"],
+    raw: { fallback: true },
+  };
+}
+
+/**
+ * Post crowd signals to API
+ */
+async function postCrowdSignals(
+  tripId: string,
+  crowds: Array<{ placeId: string; placeName: string; busyNow: number; peakHours: string[] }>,
+  raw: any
+): Promise<void> {
+  const body = {
+    observedAt: new Date().toISOString(),
+    crowds,
+    raw,
+  };
+
+  const response = await fetch(
+    `${API_BASE_URL}/internal/trip/${tripId}/signals/crowds`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to post crowd signals: ${response.statusText}`);
+  }
+}
+
+/**
+ * Process crowd data for one trip
+ */
+async function processTripCrowds(tripId: string): Promise<void> {
+  try {
+    console.log(`[Crowds][${tripId}] Processing...`);
+
+    const tripData = await fetchTripData(tripId);
+    if (!tripData) {
+      console.log(`[Crowds][${tripId}] Trip not found, skipping`);
+      return;
+    }
+
+    const { activities } = tripData;
+
+    if (activities.length === 0) {
+      console.log(`[Crowds][${tripId}] No activities, skipping`);
+      return;
+    }
+
+    console.log(
+      `[Crowds][${tripId}] Fetching crowd data for ${activities.length} places (max 8)...`
+    );
+
+    const crowds: Array<{
+      placeId: string;
+      placeName: string;
+      busyNow: number;
+      peakHours: string[];
+    }> = [];
+
+    // Limit to 8 places to avoid rate limits
+    const limitedActivities = activities.slice(0, 8);
+
+    for (const activity of limitedActivities) {
+      const { busyNow, peakHours } = await fetchCrowdData(
+        activity.place.name,
+        activity.place.lat,
+        activity.place.lon,
+        undefined
+      );
+
+      crowds.push({
+        placeId: activity.place.providerPlaceId || activity.activityId,
+        placeName: activity.place.name,
+        busyNow,
+        peakHours,
+      });
+
+      console.log(
+        `[Crowds][${tripId}] ${activity.place.name}: ${busyNow}% busy, peak ${peakHours.join(", ")}`
+      );
+    }
+
+    // Post crowd signals
+    await postCrowdSignals(tripId, crowds, { source: "worker" });
+    console.log(`[Crowds][${tripId}] Crowd signals posted`);
+
+    // Trigger recompute
+    await triggerRecompute(tripId);
+    console.log(`[Crowds][${tripId}] Recompute triggered`);
+  } catch (error) {
+    console.error(`[Crowds][${tripId}] Error processing trip:`, error);
+  }
+}
+
+/**
+ * Main polling loop for weather
  */
 async function pollWeather(): Promise<void> {
-  console.log("Polling weather data...");
+  console.log("[Weather] Polling weather data...");
 
   try {
     // Fetch all trip IDs
     const tripIds = await fetchTripIds();
-    console.log(`Found ${tripIds.length} trips`);
+    console.log(`[Weather] Found ${tripIds.length} trips`);
 
     // Process each trip
     for (const tripId of tripIds) {
       await processTrip(tripId);
     }
 
-    console.log("Polling cycle complete");
+    console.log("[Weather] Polling cycle complete");
   } catch (error) {
-    console.error("Error during polling cycle:", error);
+    console.error("[Weather] Error during polling cycle:", error);
+  }
+}
+
+/**
+ * Main polling loop for crowds
+ */
+async function pollCrowds(): Promise<void> {
+  console.log("[Crowds] Polling crowd data...");
+
+  try {
+    // Fetch all trip IDs
+    const tripIds = await fetchTripIds();
+    console.log(`[Crowds] Found ${tripIds.length} trips`);
+
+    // Process each trip
+    for (const tripId of tripIds) {
+      await processTripCrowds(tripId);
+    }
+
+    console.log("[Crowds] Polling cycle complete");
+  } catch (error) {
+    console.error("[Crowds] Error during polling cycle:", error);
   }
 }
 
@@ -276,24 +484,37 @@ async function pollWeather(): Promise<void> {
  * Start worker
  */
 async function start() {
-  console.log("=== Weather Worker ===");
+  console.log("=== Weather & Crowd Worker ===");
   console.log(`API URL: ${API_BASE_URL}`);
-  console.log(`Poll interval: ${POLL_INTERVAL_SEC}s`);
+  console.log(`Weather poll interval: ${WEATHER_POLL_INTERVAL_SEC}s`);
+  console.log(`Crowd poll interval: ${CROWD_POLL_INTERVAL_SEC}s`);
 
   if (!OPENWEATHER_API_KEY) {
-    console.error("ERROR: OPENWEATHER_API_KEY not set in environment");
-    process.exit(1);
+    console.warn("WARNING: OPENWEATHER_API_KEY not set, weather polling disabled");
+  }
+  
+  if (!BESTTIME_API_KEY) {
+    console.warn("WARNING: BESTTIME_API_KEY not set, using fallback crowd data");
   }
 
-  // Initial poll
-  await pollWeather();
-
-  // Set up interval
-  setInterval(async () => {
+  // Initial polls
+  if (OPENWEATHER_API_KEY) {
     await pollWeather();
-  }, POLL_INTERVAL_SEC * 1000);
+  }
+  await pollCrowds();
 
-  console.log("Worker started, polling every", POLL_INTERVAL_SEC, "seconds");
+  // Set up intervals
+  if (OPENWEATHER_API_KEY) {
+    setInterval(async () => {
+      await pollWeather();
+    }, WEATHER_POLL_INTERVAL_SEC * 1000);
+  }
+
+  setInterval(async () => {
+    await pollCrowds();
+  }, CROWD_POLL_INTERVAL_SEC * 1000);
+
+  console.log("Worker started");
 }
 
 start().catch((error) => {

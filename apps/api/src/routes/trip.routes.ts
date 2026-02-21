@@ -13,7 +13,7 @@ import {
 } from "@adaptive/types";
 import * as store from "../store/store.js";
 import { generateItinerary } from "../services/planner.service.js";
-import { buildWeatherSuggestion } from "../services/suggestion.service.js";
+import { buildWeatherSuggestion, buildCrowdSuggestion } from "../services/suggestion.service.js";
 import { emit } from "../realtime/sseHub.js";
 
 /**
@@ -176,26 +176,41 @@ export async function registerTripRoutes(app: FastifyInstance) {
 
         // Get weather signal
         const weatherSignal = store.getWeatherSignal(tripId);
+        
+        // Get crowd signals
+        const crowdSignal = store.getCrowdSignals(tripId);
 
         // Build weather suggestion
-        const suggestion = buildWeatherSuggestion(
+        const weatherSuggestion = buildWeatherSuggestion(
           trip,
           activities,
           latestItinerary?.itinerary,
           weatherSignal
         );
+        
+        // Build crowd suggestion
+        const crowdSuggestion = buildCrowdSuggestion(
+          trip,
+          activities,
+          latestItinerary?.itinerary,
+          crowdSignal
+        );
 
-        if (suggestion) {
-          // Store suggestion
-          store.addSuggestion(tripId, suggestion);
+        const suggestions = [weatherSuggestion, crowdSuggestion].filter(Boolean);
 
-          // Emit SSE event
-          emit(tripId, "suggestion:new", suggestion);
+        if (suggestions.length > 0) {
+          // Store and emit each suggestion
+          for (const suggestion of suggestions) {
+            if (suggestion) {
+              store.addSuggestion(tripId, suggestion);
+              emit(tripId, "suggestion:new", suggestion);
+            }
+          }
 
-          return reply.send({ ok: true, suggestion });
+          return reply.send({ ok: true, suggestions });
         }
 
-        return reply.send({ ok: true, suggestion: null });
+        return reply.send({ ok: true, suggestions: [] });
       } catch (error) {
         console.error("Error recomputing suggestions:", error);
         return reply.code(500).send({ error: "Internal server error" });
