@@ -23,18 +23,58 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    
     async function fetchSignals() {
       try {
         const data = await getSignals(tripId);
         setSignals(data);
+        setLoading(false);
+        
+        // If data is still loading, poll frequently
+        const hasWeather = data.weather && data.weather.summary && data.weather.summary !== "No data yet";
+        const hasCrowds = data.crowds && data.crowds.length > 0;
+        
+        // Clear existing interval
+        if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+        
+        // If still waiting for data, poll every 5 seconds
+        if (!hasWeather || !hasCrowds) {
+          intervalId = setInterval(async () => {
+            try {
+              const newData = await getSignals(tripId);
+              setSignals(newData);
+              
+              // Stop polling once we have all data
+              const nowHasWeather = newData.weather && newData.weather.summary && newData.weather.summary !== "No data yet";
+              const nowHasCrowds = newData.crowds && newData.crowds.length > 0;
+              
+              if (nowHasWeather && nowHasCrowds && intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+              }
+            } catch (err) {
+              console.error("Error polling signals:", err);
+            }
+          }, 5000); // Poll every 5 seconds
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load signals");
-      } finally {
         setLoading(false);
       }
     }
 
     fetchSignals();
+    
+    // Cleanup interval on unmount
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   }, [tripId]);
 
   if (loading) {
@@ -53,22 +93,16 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
     );
   }
 
-  if (!signals?.weather && (!signals?.crowds || signals.crowds.length === 0)) {
-    return (
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <p className="text-sm text-gray-500">No signals available yet.</p>
-      </div>
-    );
-  }
-
-  const { weather, crowds } = signals;
+  const { weather, crowds } = signals || {};
   const hasWeather = weather && weather.summary && weather.summary !== "No data yet";
   const hasCrowds = crowds && crowds.length > 0;
+  const isLoadingWeather = !weather || !weather.summary || weather.summary === "No data yet";
+  const isLoadingCrowds = !crowds || crowds.length === 0;
 
   return (
     <div className="space-y-4">
       {/* Weather Section */}
-      {hasWeather && (
+      {hasWeather ? (
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <h3 className="mb-3 text-lg font-semibold">Weather</h3>
           
@@ -90,10 +124,17 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
             )}
           </div>
         </div>
-      )}
+      ) : isLoadingWeather ? (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <div className="flex items-center gap-2">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+            <p className="text-sm text-blue-700">Fetching weather forecast...</p>
+          </div>
+        </div>
+      ) : null}
 
       {/* Crowd Section */}
-      {hasCrowds && (
+      {hasCrowds ? (
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <h3 className="mb-3 text-lg font-semibold">Crowd Levels</h3>
           
@@ -117,9 +158,16 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
             })}
           </div>
         </div>
-      )}
+      ) : isLoadingCrowds ? (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <div className="flex items-center gap-2">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+            <p className="text-sm text-blue-700">Analyzing venue crowd levels...</p>
+          </div>
+        </div>
+      ) : null}
 
-      {!hasWeather && !hasCrowds && (
+      {!hasWeather && !hasCrowds && !isLoadingWeather && !isLoadingCrowds && (
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <p className="text-sm text-gray-500">No signals available yet.</p>
         </div>

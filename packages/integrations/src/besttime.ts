@@ -4,7 +4,7 @@
  */
 
 const BESTTIME_API_BASE = "https://besttime.app/api/v1";
-const REQUEST_TIMEOUT_MS = 8000;
+const REQUEST_TIMEOUT_MS = 20000; // Increased to 20 seconds for slow API responses
 
 // ============================================================================
 // Types

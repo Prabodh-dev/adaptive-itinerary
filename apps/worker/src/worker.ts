@@ -540,6 +540,34 @@ async function start() {
     console.log(`Max venues per trip: ${MAX_CROWD_VENUES_PER_TRIP}`);
   }
 
+  // Wait for API server to be ready
+  console.log("Waiting for API server to be ready...");
+  let apiReady = false;
+  let attempts = 0;
+  const maxAttempts = 30; // 30 seconds max wait
+  
+  while (!apiReady && attempts < maxAttempts) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/health`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      if (response.ok) {
+        apiReady = true;
+        console.log("✓ API server is ready");
+      }
+    } catch (error) {
+      attempts++;
+      if (attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+  }
+
+  if (!apiReady) {
+    console.error("✗ API server did not become ready in time. Exiting...");
+    process.exit(1);
+  }
+
   // Initial polls
   await pollWeather();
   if (crowdEnabled) {
