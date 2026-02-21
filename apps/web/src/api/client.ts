@@ -146,14 +146,58 @@ export interface SignalsResponse {
 export interface Suggestion {
   suggestionId: string;
   kind: "reorder" | "swap" | "shift";
+  status: "pending" | "accepted" | "rejected" | "applied";
+  trigger: "weather" | "crowds" | "transit" | "traffic" | "mixed";
+  createdAt: string;
   reasons: string[];
-  benefit?: Record<string, number>;
-  beforePlan: unknown;
-  afterPlan: unknown;
+  confidence: number;
+  impact?: {
+    travelSavedMin?: number;
+    weatherRiskReduced?: number;
+    crowdReduced?: number;
+    delayAvoidedMin?: number;
+  };
+  beforePlan: {
+    version: number;
+    items: ItineraryItem[];
+  };
+  afterPlan: {
+    version: number;
+    items: ItineraryItem[];
+  };
+  diff?: {
+    moved: Array<{ placeName: string; from: string; to: string }>;
+    swapped: Array<{ fromPlace: string; toPlace: string }>;
+    summary: string;
+  };
 }
 
 export interface ListSuggestionsResponse {
   suggestions: Suggestion[];
+}
+
+export interface FeedbackRequest {
+  suggestionId: string;
+  action: "accept" | "reject";
+  meta?: Record<string, unknown>;
+}
+
+export interface Weights {
+  weatherWeight: number;
+  crowdWeight: number;
+  transitWeight: number;
+  travelWeight: number;
+  changeAversion: number;
+}
+
+export interface FeedbackResponse {
+  ok: true;
+  weights: Weights;
+}
+
+export interface ApplySuggestionResponse {
+  version: number;
+  itinerary: Itinerary;
 }
 
 export async function getSignals(tripId: string): Promise<SignalsResponse> {
@@ -163,4 +207,17 @@ export async function getSignals(tripId: string): Promise<SignalsResponse> {
 export async function getSuggestions(tripId: string, status?: string): Promise<ListSuggestionsResponse> {
   const query = status ? `?status=${status}` : "";
   return request<ListSuggestionsResponse>(`/trip/${tripId}/suggestions${query}`);
+}
+
+export async function applySuggestion(tripId: string, suggestionId: string): Promise<ApplySuggestionResponse> {
+  return request<ApplySuggestionResponse>(`/trip/${tripId}/suggestions/${suggestionId}/apply`, {
+    method: "POST",
+  });
+}
+
+export async function sendFeedback(tripId: string, suggestionId: string, action: "accept" | "reject", meta?: Record<string, unknown>): Promise<FeedbackResponse> {
+  return request<FeedbackResponse>(`/trip/${tripId}/feedback`, {
+    method: "POST",
+    body: JSON.stringify({ suggestionId, action, meta }),
+  });
 }
