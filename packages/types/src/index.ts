@@ -15,6 +15,8 @@ export {
   GenerateItineraryRequestSchema,
   GenerateItineraryResponseSchema,
   GetTripResponseSchema,
+  PlacesSearchRequestSchema,
+  PlacesSearchResponseSchema,
 } from "./schemas.js";
 
 // Export all inferred TypeScript types
@@ -34,6 +36,8 @@ export type {
   GenerateItineraryRequest,
   GenerateItineraryResponse,
   GetTripResponse,
+  PlacesSearchRequest,
+  PlacesSearchResponse,
 } from "./schemas.js";
 
 // Legacy types (for future phases)

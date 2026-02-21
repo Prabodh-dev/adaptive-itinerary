@@ -92,6 +92,7 @@ export const ItinerarySchema = z.object({
 export const GenerateItineraryRequestSchema = z.object({
   mode: z.enum(["driving", "walking", "transit"]).default("driving"),
   startLocation: LatLngSchema.optional(),
+  optimizeOrder: z.boolean().default(true),
 });
 
 export const GenerateItineraryResponseSchema = z.object({
@@ -113,6 +114,20 @@ export const GetTripResponseSchema = z.object({
     .optional(),
 });
 
+// ===== Places Search Schemas =====
+
+export const PlacesSearchRequestSchema = z.object({
+  query: z.string().min(1),
+  near: LatLngSchema,
+  radiusKm: z.number().positive().default(8),
+  categories: z.array(z.string()).optional(),
+  limit: z.number().int().positive().max(50).default(20),
+});
+
+export const PlacesSearchResponseSchema = z.object({
+  places: z.array(PlaceSchema),
+});
+
 // ===== Inferred TypeScript Types =====
 
 export type LatLng = z.infer<typeof LatLngSchema>;
@@ -130,3 +145,5 @@ export type Itinerary = z.infer<typeof ItinerarySchema>;
 export type GenerateItineraryRequest = z.infer<typeof GenerateItineraryRequestSchema>;
 export type GenerateItineraryResponse = z.infer<typeof GenerateItineraryResponseSchema>;
 export type GetTripResponse = z.infer<typeof GetTripResponseSchema>;
+export type PlacesSearchRequest = z.infer<typeof PlacesSearchRequestSchema>;
+export type PlacesSearchResponse = z.infer<typeof PlacesSearchResponseSchema>;

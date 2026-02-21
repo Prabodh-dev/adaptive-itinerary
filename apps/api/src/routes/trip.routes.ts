@@ -116,11 +116,12 @@ export async function registerTripRoutes(app: FastifyInstance) {
         }
 
         // Generate itinerary
-        const itinerary = generateItinerary({
+        const itinerary = await generateItinerary({
           trip,
           activities,
           mode: body.mode || "driving",
           startLocation: body.startLocation,
+          optimizeOrder: body.optimizeOrder ?? true,
         });
 
         // Store the itinerary
