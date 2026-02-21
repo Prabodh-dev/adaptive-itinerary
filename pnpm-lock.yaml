@@ -88,6 +88,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@adaptive/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@adaptive/types':
         specifier: workspace:*
         version: link:../../packages/types
