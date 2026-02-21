@@ -13,6 +13,8 @@ import {
 } from "@adaptive/types";
 import * as store from "../store/store.js";
 import { generateItinerary } from "../services/planner.service.js";
+import { buildWeatherSuggestion } from "../services/suggestion.service.js";
+import { emit } from "../realtime/sseHub.js";
 
 /**
  * Register trip routes
@@ -138,6 +140,64 @@ export async function registerTripRoutes(app: FastifyInstance) {
           return reply.code(400).send({ error: "Invalid request data", details: error });
         }
         console.error("Error generating itinerary:", error);
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
+  // GET /trips - Get all trip IDs (for worker)
+  app.get("/trips", async (_request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const tripIds = store.getTripIds();
+      return reply.send({ tripIds });
+    } catch (error) {
+      console.error("Error getting trip IDs:", error);
+      return reply.code(500).send({ error: "Internal server error" });
+    }
+  });
+
+  // POST /internal/trip/:tripId/recompute - Recompute suggestions based on latest data
+  app.post(
+    "/internal/trip/:tripId/recompute",
+    async (
+      request: FastifyRequest<{ Params: { tripId: string } }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const { tripId } = request.params;
+
+        // Get trip data
+        const tripData = store.getTrip(tripId);
+        if (!tripData) {
+          return reply.code(404).send({ error: "Trip not found" });
+        }
+
+        const { trip, activities, latestItinerary } = tripData;
+
+        // Get weather signal
+        const weatherSignal = store.getWeatherSignal(tripId);
+
+        // Build weather suggestion
+        const suggestion = buildWeatherSuggestion(
+          trip,
+          activities,
+          latestItinerary?.itinerary,
+          weatherSignal
+        );
+
+        if (suggestion) {
+          // Store suggestion
+          store.addSuggestion(tripId, suggestion);
+
+          // Emit SSE event
+          emit(tripId, "suggestion:new", suggestion);
+
+          return reply.send({ ok: true, suggestion });
+        }
+
+        return reply.send({ ok: true, suggestion: null });
+      } catch (error) {
+        console.error("Error recomputing suggestions:", error);
         return reply.code(500).send({ error: "Internal server error" });
       }
     }

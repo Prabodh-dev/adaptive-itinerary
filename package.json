@@ -3,7 +3,10 @@
   "private": true,
   "packageManager": "pnpm@9",
   "scripts": {
-    "dev": "pnpm -r dev"
+    "dev": "pnpm -r dev",
+    "dev:api": "pnpm --filter @adaptive/api dev",
+    "dev:web": "pnpm --filter @adaptive/web dev",
+    "dev:worker": "pnpm --filter @adaptive/worker dev"
   },
   "devDependencies": {
     "typescript": "^5.0.0"

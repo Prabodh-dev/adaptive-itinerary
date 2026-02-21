@@ -8,6 +8,7 @@ import type {
   ActivityInput,
   Itinerary,
   CreateTripRequest,
+  Suggestion,
 } from "@adaptive/types";
 
 // Internal record types
@@ -27,10 +28,19 @@ export interface ItineraryVersionRecord {
   generatedAt: string;
 }
 
+export interface WeatherSignalRecord {
+  observedAt: string;
+  summary: string;
+  riskHours: string[];
+  raw?: any;
+}
+
 // In-memory stores
 const trips = new Map<string, TripRecord>();
 const activities = new Map<string, ActivityRecord[]>();
 const itineraries = new Map<string, ItineraryVersionRecord[]>();
+const weatherSignals = new Map<string, WeatherSignalRecord>();
+const suggestions = new Map<string, Suggestion[]>();
 
 /**
  * Create a new trip
@@ -152,3 +162,62 @@ export function getLatestItinerary(
 export function getActivities(tripId: string): ActivityRecord[] {
   return activities.get(tripId) || [];
 }
+
+/**
+ * Get all trip IDs (for worker polling)
+ */
+export function getTripIds(): string[] {
+  return Array.from(trips.keys());
+}
+
+/**
+ * Upsert weather signal for a trip
+ */
+export function upsertWeatherSignal(
+  tripId: string,
+  data: { observedAt: string; summary: string; riskHours: string[]; raw?: any }
+): void {
+  if (!trips.has(tripId)) {
+    throw new Error(`Trip ${tripId} not found`);
+  }
+
+  weatherSignals.set(tripId, {
+    observedAt: data.observedAt,
+    summary: data.summary,
+    riskHours: data.riskHours,
+    raw: data.raw,
+  });
+}
+
+/**
+ * Get weather signal for a trip
+ */
+export function getWeatherSignal(tripId: string): WeatherSignalRecord | null {
+  return weatherSignals.get(tripId) || null;
+}
+
+/**
+ * Add a suggestion for a trip
+ */
+export function addSuggestion(tripId: string, suggestion: Suggestion): void {
+  if (!trips.has(tripId)) {
+    throw new Error(`Trip ${tripId} not found`);
+  }
+
+  const tripSuggestions = suggestions.get(tripId) || [];
+  tripSuggestions.push(suggestion);
+  suggestions.set(tripId, tripSuggestions);
+}
+
+/**
+ * List suggestions for a trip
+ */
+export function listSuggestions(
+  tripId: string,
+  _status?: string
+): Suggestion[] {
+  const tripSuggestions = suggestions.get(tripId) || [];
+  // Phase 3: Only returning all suggestions, status filtering can be added later
+  return tripSuggestions;
+}
+
