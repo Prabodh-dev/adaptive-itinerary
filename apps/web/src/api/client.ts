@@ -116,3 +116,36 @@ export async function searchPlaces(
     body: JSON.stringify({ query, near, radiusKm, limit }),
   });
 }
+
+// ===== Phase 3: Signals & Suggestions =====
+
+export interface SignalWeather {
+  summary: string;
+  riskHours: string[];
+}
+
+export interface SignalsResponse {
+  weather: SignalWeather;
+}
+
+export interface Suggestion {
+  suggestionId: string;
+  kind: "reorder" | "swap" | "shift";
+  reasons: string[];
+  benefit?: Record<string, number>;
+  beforePlan: unknown;
+  afterPlan: unknown;
+}
+
+export interface ListSuggestionsResponse {
+  suggestions: Suggestion[];
+}
+
+export async function getSignals(tripId: string): Promise<SignalsResponse> {
+  return request<SignalsResponse>(`/trip/${tripId}/signals`);
+}
+
+export async function getSuggestions(tripId: string, status?: string): Promise<ListSuggestionsResponse> {
+  const query = status ? `?status=${status}` : "";
+  return request<ListSuggestionsResponse>(`/trip/${tripId}/suggestions${query}`);
+}
