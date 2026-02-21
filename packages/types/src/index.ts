@@ -25,8 +25,18 @@ export {
   UpsertTransitSignalRequestSchema,
   SignalsResponseSchema,
   UpsertWeatherSignalRequestSchema,
+  SuggestionStatusSchema,
+  SuggestionKindSchema,
+  SuggestionTriggerSchema,
+  SuggestionDiffSchema,
+  SuggestionImpactSchema,
+  SuggestionPlanSchema,
   SuggestionSchema,
   ListSuggestionsResponseSchema,
+  FeedbackRequestSchema,
+  WeightsSchema,
+  FeedbackResponseSchema,
+  ApplySuggestionResponseSchema,
 } from "./schemas.js";
 
 // Export all inferred TypeScript types
@@ -56,8 +66,18 @@ export type {
   UpsertTransitSignalRequest,
   SignalsResponse,
   UpsertWeatherSignalRequest,
+  SuggestionStatus,
+  SuggestionKind,
+  SuggestionTrigger,
+  SuggestionDiff,
+  SuggestionImpact,
+  SuggestionPlan,
   Suggestion,
   ListSuggestionsResponse,
+  FeedbackRequest,
+  Weights,
+  FeedbackResponse,
+  ApplySuggestionResponse,
 } from "./schemas.js";
 
 // Legacy types (for future phases)

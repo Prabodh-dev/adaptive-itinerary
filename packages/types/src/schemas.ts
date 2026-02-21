@@ -184,18 +184,92 @@ export const SignalsResponseSchema = z.object({
 
 // ===== Suggestion Schemas =====
 
+export const SuggestionStatusSchema = z.enum(["pending", "accepted", "rejected", "applied"]);
+export type SuggestionStatus = z.infer<typeof SuggestionStatusSchema>;
+
+export const SuggestionKindSchema = z.enum(["reorder", "swap", "shift"]);
+export type SuggestionKind = z.infer<typeof SuggestionKindSchema>;
+
+export const SuggestionTriggerSchema = z.enum(["weather", "crowds", "transit", "traffic", "mixed"]);
+export type SuggestionTrigger = z.infer<typeof SuggestionTriggerSchema>;
+
+export const SuggestionDiffSchema = z.object({
+  moved: z.array(z.object({
+    placeName: z.string(),
+    from: z.string(),
+    to: z.string(),
+  })),
+  swapped: z.array(z.object({
+    fromPlace: z.string(),
+    toPlace: z.string(),
+  })),
+  summary: z.string(),
+});
+export type SuggestionDiff = z.infer<typeof SuggestionDiffSchema>;
+
+export const SuggestionImpactSchema = z.object({
+  travelSavedMin: z.number().optional(),
+  weatherRiskReduced: z.number().optional(),
+  crowdReduced: z.number().optional(),
+  delayAvoidedMin: z.number().optional(),
+});
+export type SuggestionImpact = z.infer<typeof SuggestionImpactSchema>;
+
+export const SuggestionPlanSchema = z.object({
+  version: z.number(),
+  items: z.array(ItineraryItemSchema),
+});
+export type SuggestionPlan = z.infer<typeof SuggestionPlanSchema>;
+
 export const SuggestionSchema = z.object({
   suggestionId: z.string(),
-  kind: z.enum(["reorder", "swap", "shift"]),
+  kind: SuggestionKindSchema,
+  status: SuggestionStatusSchema.default("pending"),
+  createdAt: z.string(),
+  trigger: SuggestionTriggerSchema.default("mixed"),
   reasons: z.array(z.string()),
-  benefit: z.record(z.number()).optional(),
-  beforePlan: z.any(),
-  afterPlan: z.any(),
+  confidence: z.number().min(0).max(1),
+  impact: SuggestionImpactSchema.optional(),
+  beforePlan: SuggestionPlanSchema,
+  afterPlan: SuggestionPlanSchema,
+  diff: SuggestionDiffSchema.optional(),
 });
 
 export const ListSuggestionsResponseSchema = z.object({
   suggestions: z.array(SuggestionSchema),
 });
+
+// ===== Feedback Schemas =====
+
+export const FeedbackRequestSchema = z.object({
+  suggestionId: z.string(),
+  action: z.enum(["accept", "reject"]),
+  meta: z.record(z.any()).optional(),
+});
+export type FeedbackRequest = z.infer<typeof FeedbackRequestSchema>;
+
+export const WeightsSchema = z.object({
+  weatherWeight: z.number(),
+  crowdWeight: z.number(),
+  transitWeight: z.number(),
+  travelWeight: z.number(),
+  changeAversion: z.number(),
+});
+export type Weights = z.infer<typeof WeightsSchema>;
+
+export const FeedbackResponseSchema = z.object({
+  ok: z.literal(true),
+  weights: WeightsSchema,
+});
+export type FeedbackResponse = z.infer<typeof FeedbackResponseSchema>;
+
+// ===== Apply Suggestion Response =====
+
+export const ApplySuggestionResponseSchema = z.object({
+  version: z.number(),
+  itinerary: ItinerarySchema,
+});
+export type ApplySuggestionResponse = z.infer<typeof ApplySuggestionResponseSchema>;
 
 // ===== Inferred TypeScript Types =====
 

@@ -10,8 +10,11 @@ import type {
   ItineraryItem,
   CreateTripRequest,
   Suggestion,
+  SuggestionStatus,
+  SuggestionTrigger,
   CrowdSignalItem,
   TransitAlert,
+  Weights,
 } from "@adaptive/types";
 
 // Internal record types
@@ -50,6 +53,15 @@ export interface TransitSignalRecord {
   raw?: any;
 }
 
+// Default weights for a new trip
+const DEFAULT_WEIGHTS: Weights = {
+  weatherWeight: 1.0,
+  crowdWeight: 1.0,
+  transitWeight: 1.0,
+  travelWeight: 1.0,
+  changeAversion: 1.0,
+};
+
 // In-memory stores
 const trips = new Map<string, TripRecord>();
 const activities = new Map<string, ActivityRecord[]>();
@@ -58,6 +70,8 @@ const weatherSignals = new Map<string, WeatherSignalRecord>();
 const crowdSignals = new Map<string, CrowdSignalRecord>();
 const transitSignals = new Map<string, TransitSignalRecord>();
 const suggestions = new Map<string, Suggestion[]>();
+const weights = new Map<string, Weights>();
+const suggestionCooldowns = new Map<string, number>(); // tripId -> last suggestion timestamp
 
 /**
  * Create a new trip
@@ -299,10 +313,103 @@ export function addSuggestion(tripId: string, suggestion: Suggestion): void {
  */
 export function listSuggestions(
   tripId: string,
-  _status?: string
+  status?: string
 ): Suggestion[] {
   const tripSuggestions = suggestions.get(tripId) || [];
-  // Phase 3: Only returning all suggestions, status filtering can be added later
+  if (status) {
+    return tripSuggestions.filter((s) => s.status === status);
+  }
   return tripSuggestions;
+}
+
+/**
+ * Set suggestion status
+ */
+export function setSuggestionStatus(
+  tripId: string,
+  suggestionId: string,
+  status: SuggestionStatus
+): boolean {
+  const tripSuggestions = suggestions.get(tripId) || [];
+  const suggestion = tripSuggestions.find((s) => s.suggestionId === suggestionId);
+  if (!suggestion) return false;
+  
+  suggestion.status = status;
+  suggestions.set(tripId, tripSuggestions);
+  return true;
+}
+
+/**
+ * Get a suggestion by ID
+ */
+export function getSuggestion(
+  tripId: string,
+  suggestionId: string
+): Suggestion | null {
+  const tripSuggestions = suggestions.get(tripId) || [];
+  return tripSuggestions.find((s) => s.suggestionId === suggestionId) || null;
+}
+
+/**
+ * Get weights for a trip (creates defaults if missing)
+ */
+export function getWeights(tripId: string): Weights {
+  let tripWeights = weights.get(tripId);
+  if (!tripWeights) {
+    tripWeights = { ...DEFAULT_WEIGHTS };
+    weights.set(tripId, tripWeights);
+  }
+  return tripWeights;
+}
+
+/**
+ * Update weights based on feedback
+ */
+export function updateWeights(
+  tripId: string,
+  { trigger, accepted }: { trigger: SuggestionTrigger; accepted: boolean }
+): Weights {
+  const tripWeights = getWeights(tripId);
+  const delta = accepted ? 0.05 : -0.05;
+  const aversionDelta = accepted ? -0.03 : 0.03;
+
+  if (trigger === "weather") {
+    tripWeights.weatherWeight = Math.max(0.5, Math.min(2.0, tripWeights.weatherWeight + delta));
+  } else if (trigger === "crowds") {
+    tripWeights.crowdWeight = Math.max(0.5, Math.min(2.0, tripWeights.crowdWeight + delta));
+  } else if (trigger === "transit" || trigger === "traffic") {
+    tripWeights.transitWeight = Math.max(0.5, Math.min(2.0, tripWeights.transitWeight + delta));
+  }
+
+  tripWeights.changeAversion = Math.max(0.5, Math.min(2.0, tripWeights.changeAversion + aversionDelta));
+
+  weights.set(tripId, tripWeights);
+  return tripWeights;
+}
+
+/**
+ * Check if suggestion can be created (cooldown check)
+ * Returns true if cooldown has passed (10 minutes)
+ */
+export function canCreateSuggestion(tripId: string): boolean {
+  const lastSuggestionTime = suggestionCooldowns.get(tripId);
+  if (!lastSuggestionTime) return true;
+  
+  const cooldownMs = 10 * 60 * 1000; // 10 minutes
+  return Date.now() - lastSuggestionTime > cooldownMs;
+}
+
+/**
+ * Update suggestion cooldown timestamp
+ */
+export function updateSuggestionCooldown(tripId: string): void {
+  suggestionCooldowns.set(tripId, Date.now());
+}
+
+/**
+ * Get last suggestion timestamp for a trip
+ */
+export function getLastSuggestionTime(tripId: string): number | null {
+  return suggestionCooldowns.get(tripId) || null;
 }
 

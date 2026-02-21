@@ -8,9 +8,12 @@ import type {
   Itinerary,
   ItineraryItem,
   Suggestion,
+  Weights,
   CrowdSignalItem,
 } from "@adaptive/types";
 import type { WeatherSignalRecord, CrowdSignalRecord, TransitSignalRecord } from "../store/store.js";
+import { buildPlanDiff } from "./diff.service.js";
+import { computeImpact, computeConfidence } from "./impact.service.js";
 
 /**
  * Check if a time falls within risk hours
@@ -165,19 +168,40 @@ export function buildWeatherSuggestion(
   // Reorder itinerary (respecting locked activities)
   const afterPlanItems = reorderToAvoidRain(latestItinerary.items, riskyActivities, lockedIds);
 
+  // Get current version from latestItinerary
+  const currentVersion = latestItinerary.totalTravelMin ? 1 : 1;
+
+  // Compute diff, impact, and confidence
+  const diff = buildPlanDiff(latestItinerary.items, afterPlanItems);
+  const impact = computeImpact(latestItinerary.items, afterPlanItems, "weather");
+  const dummyWeights: Weights = {
+    weatherWeight: 1.0,
+    crowdWeight: 1.0,
+    transitWeight: 1.0,
+    travelWeight: 1.0,
+    changeAversion: 1.0,
+  };
+  const numChanges = diff.moved.length + diff.swapped.length;
+  const confidence = computeConfidence(dummyWeights, "weather", impact, numChanges);
+
   const suggestion: Suggestion = {
     suggestionId,
     kind: "reorder",
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    trigger: "weather",
     reasons,
-    benefit: {
-      weatherRiskReduced: 0.5,
-    },
+    confidence,
+    impact,
     beforePlan: {
+      version: currentVersion,
       items: latestItinerary.items,
     },
     afterPlan: {
+      version: currentVersion + 1,
       items: afterPlanItems,
     },
+    diff,
   };
 
   return suggestion;
@@ -356,19 +380,37 @@ export function buildCrowdSuggestion(
   // Reorder itinerary (respecting locked activities)
   const afterPlanItems = reorderToAvoidCrowds(latestItinerary.items, crowdedActivities, lockedIds);
 
+  // Compute diff, impact, and confidence
+  const diff = buildPlanDiff(latestItinerary.items, afterPlanItems);
+  const impact = computeImpact(latestItinerary.items, afterPlanItems, "crowds");
+  const dummyWeights: Weights = {
+    weatherWeight: 1.0,
+    crowdWeight: 1.0,
+    transitWeight: 1.0,
+    travelWeight: 1.0,
+    changeAversion: 1.0,
+  };
+  const numChanges = diff.moved.length + diff.swapped.length;
+  const confidence = computeConfidence(dummyWeights, "crowds", impact, numChanges);
+
   const suggestion: Suggestion = {
     suggestionId,
     kind: "shift",
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    trigger: "crowds",
     reasons,
-    benefit: {
-      crowdExposureReduced: 0.6,
-    },
+    confidence,
+    impact,
     beforePlan: {
+      version: 1,
       items: latestItinerary.items,
     },
     afterPlan: {
+      version: 2,
       items: afterPlanItems,
     },
+    diff,
   };
 
   return suggestion;
@@ -449,19 +491,38 @@ export function buildTransitSuggestion(
 
   const suggestionId = `sug_${nanoid(10)}`;
 
+  // Compute diff, impact, and confidence
+  const diff = buildPlanDiff(latestItinerary.items, afterPlanItems);
+  const impact = computeImpact(latestItinerary.items, afterPlanItems, "transit");
+  impact.delayAvoidedMin = totalDelay;
+  const dummyWeights: Weights = {
+    weatherWeight: 1.0,
+    crowdWeight: 1.0,
+    transitWeight: 1.0,
+    travelWeight: 1.0,
+    changeAversion: 1.0,
+  };
+  const numChanges = diff.moved.length + diff.swapped.length;
+  const confidence = computeConfidence(dummyWeights, "transit", impact, numChanges);
+
   const suggestion: Suggestion = {
     suggestionId,
     kind: "reorder",
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    trigger: "transit",
     reasons,
-    benefit: {
-      delayAvoidedMin: totalDelay,
-    },
+    confidence,
+    impact,
     beforePlan: {
+      version: 1,
       items: latestItinerary.items,
     },
     afterPlan: {
+      version: 2,
       items: afterPlanItems,
     },
+    diff,
   };
 
   return suggestion;
