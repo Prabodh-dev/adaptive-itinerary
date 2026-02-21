@@ -6,6 +6,9 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { registerTripRoutes } from "./routes/trip.routes.js";
 import { registerPlacesRoutes } from "./routes/places.routes.js";
+import { registerSignalsRoutes } from "./routes/signals.routes.js";
+import { registerSuggestionsRoutes } from "./routes/suggestions.routes.js";
+import { registerStreamRoutes } from "./routes/stream.routes.js";
 
 const PORT = parseInt(process.env.PORT || "8080", 10);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
@@ -33,6 +36,15 @@ async function start() {
 
   // Register places routes
   await registerPlacesRoutes(app);
+
+  // Register signals routes (Phase 3 - Weather)
+  await registerSignalsRoutes(app);
+
+  // Register suggestions routes (Phase 3 - Weather)
+  await registerSuggestionsRoutes(app);
+
+  // Register stream routes (Phase 3 - SSE)
+  await registerStreamRoutes(app);
 
   // Start server
   try {

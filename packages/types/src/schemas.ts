@@ -128,6 +128,41 @@ export const PlacesSearchResponseSchema = z.object({
   places: z.array(PlaceSchema),
 });
 
+// ===== Weather Signal Schemas =====
+
+export const SignalWeatherSchema = z.object({
+  summary: z.string(),
+  riskHours: z.array(z.string()),
+});
+
+export const SignalsResponseSchema = z.object({
+  weather: SignalWeatherSchema,
+});
+
+export const UpsertWeatherSignalRequestSchema = z.object({
+  observedAt: z.string(),
+  weather: z.object({
+    summary: z.string(),
+    riskHours: z.array(z.string()),
+  }),
+  raw: z.any().optional(),
+});
+
+// ===== Suggestion Schemas =====
+
+export const SuggestionSchema = z.object({
+  suggestionId: z.string(),
+  kind: z.enum(["reorder", "swap", "shift"]),
+  reasons: z.array(z.string()),
+  benefit: z.record(z.number()).optional(),
+  beforePlan: z.any(),
+  afterPlan: z.any(),
+});
+
+export const ListSuggestionsResponseSchema = z.object({
+  suggestions: z.array(SuggestionSchema),
+});
+
 // ===== Inferred TypeScript Types =====
 
 export type LatLng = z.infer<typeof LatLngSchema>;
@@ -147,3 +182,9 @@ export type GenerateItineraryResponse = z.infer<typeof GenerateItineraryResponse
 export type GetTripResponse = z.infer<typeof GetTripResponseSchema>;
 export type PlacesSearchRequest = z.infer<typeof PlacesSearchRequestSchema>;
 export type PlacesSearchResponse = z.infer<typeof PlacesSearchResponseSchema>;
+export type SignalWeather = z.infer<typeof SignalWeatherSchema>;
+export type SignalsResponse = z.infer<typeof SignalsResponseSchema>;
+export type UpsertWeatherSignalRequest = z.infer<typeof UpsertWeatherSignalRequestSchema>;
+export type Suggestion = z.infer<typeof SuggestionSchema>;
+export type ListSuggestionsResponse = z.infer<typeof ListSuggestionsResponseSchema>;
+

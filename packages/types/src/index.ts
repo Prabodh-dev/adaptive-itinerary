@@ -17,6 +17,11 @@ export {
   GetTripResponseSchema,
   PlacesSearchRequestSchema,
   PlacesSearchResponseSchema,
+  SignalWeatherSchema,
+  SignalsResponseSchema,
+  UpsertWeatherSignalRequestSchema,
+  SuggestionSchema,
+  ListSuggestionsResponseSchema,
 } from "./schemas.js";
 
 // Export all inferred TypeScript types
@@ -38,6 +43,11 @@ export type {
   GetTripResponse,
   PlacesSearchRequest,
   PlacesSearchResponse,
+  SignalWeather,
+  SignalsResponse,
+  UpsertWeatherSignalRequest,
+  Suggestion,
+  ListSuggestionsResponse,
 } from "./schemas.js";
 
 // Legacy types (for future phases)
@@ -47,11 +57,3 @@ export type Signals = {
   transit: { alerts: { line: string; delayMin: number; message: string }[] };
 };
 
-export type Suggestion = {
-  suggestionId: string;
-  kind: "reorder" | "swap" | "shift";
-  reasons: string[];
-  benefit?: Record<string, number>;
-  beforePlan: any;
-  afterPlan: any;
-};
