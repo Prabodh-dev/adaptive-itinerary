@@ -4,6 +4,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import * as store from "../store/store.js";
 import * as sseHub from "../realtime/sseHub.js";
+import { getCommunitySignalsForTrip } from "../services/community-signals.service.js";
 
 /**
  * Register stream routes
@@ -40,6 +41,7 @@ export async function registerStreamRoutes(app: FastifyInstance) {
 
       // Send initial ping with current weather signal
       const weatherSignal = store.getWeatherSignal(tripId);
+      const communityReports = await getCommunitySignalsForTrip(tripId);
       const initialData = {
         weather: weatherSignal
           ? {
@@ -50,6 +52,7 @@ export async function registerStreamRoutes(app: FastifyInstance) {
               summary: "No data yet",
               riskHours: [],
             },
+        community: { reports: communityReports },
       };
       reply.raw.write(`event: signal:update\ndata: ${JSON.stringify(initialData)}\n\n`);
 

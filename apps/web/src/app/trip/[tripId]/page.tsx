@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { getTrip, type GetTripResponse } from "@/api/client";
 import MapView from "@/components/MapView";
 import SignalsPanel from "@/components/SignalsPanel";
@@ -105,6 +106,25 @@ export default function TripDashboardPage() {
                 </>
               )}
             </dl>
+          </div>
+        </div>
+      </section>
+
+      <section className="glass-card p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-2xl">Contribute Live Intelligence</h2>
+            <p className="text-sm text-[#4f6559]">
+              Help improve live reroutes with verified local reports.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/contributor/report" className="btn-subtle px-3 py-2 text-xs">
+              Contributor Portal
+            </Link>
+            <Link href="/admin/reports" className="btn-subtle px-3 py-2 text-xs">
+              Admin Review
+            </Link>
           </div>
         </div>
       </section>

@@ -182,6 +182,23 @@ export const SignalsResponseSchema = z.object({
   weather: SignalWeatherSchema,
   crowds: z.array(CrowdSignalItemSchema).optional(),
   transit: TransitSignalSchema.optional(),
+  community: z
+    .object({
+      reports: z.array(
+        z.object({
+          id: z.string(),
+          type: z.string(),
+          severity: z.number().int().min(1).max(5),
+          message: z.string(),
+          lat: z.number(),
+          lng: z.number(),
+          photoUrl: z.string().optional(),
+          expiresAt: z.string(),
+          createdAt: z.string(),
+        })
+      ),
+    })
+    .optional(),
 });
 
 // ===== Suggestion Schemas =====
@@ -300,6 +317,8 @@ export type TransitAlert = z.infer<typeof TransitAlertSchema>;
 export type TransitSignal = z.infer<typeof TransitSignalSchema>;
 export type UpsertTransitSignalRequest = z.infer<typeof UpsertTransitSignalRequestSchema>;
 export type SignalsResponse = z.infer<typeof SignalsResponseSchema>;
+export type CommunitySignalReport = NonNullable<SignalsResponse["community"]>["reports"][number];
+export type CommunitySignals = NonNullable<SignalsResponse["community"]>;
 export type Suggestion = z.infer<typeof SuggestionSchema>;
 export type ListSuggestionsResponse = z.infer<typeof ListSuggestionsResponseSchema>;
 

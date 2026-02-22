@@ -4,11 +4,14 @@
 import "dotenv/config";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import { registerTripRoutes } from "./routes/trip.routes.js";
 import { registerPlacesRoutes } from "./routes/places.routes.js";
 import { registerSignalsRoutes } from "./routes/signals.routes.js";
 import { registerSuggestionsRoutes } from "./routes/suggestions.routes.js";
 import { registerStreamRoutes } from "./routes/stream.routes.js";
+import { registerContributorRoutes } from "./routes/contributor.routes.js";
+import { registerAdminRoutes } from "./routes/admin.routes.js";
 
 const PORT = parseInt(process.env.PORT || "8080", 10);
 
@@ -24,6 +27,7 @@ async function start() {
     origin: true,
     credentials: true,
   });
+  await app.register(multipart);
 
   // Health check endpoint
   app.get("/health", async () => {
@@ -44,6 +48,12 @@ async function start() {
 
   // Register stream routes (Phase 3 - SSE)
   await registerStreamRoutes(app);
+
+  // Register contributor routes (Phase 7)
+  await registerContributorRoutes(app);
+
+  // Register admin review routes (Phase 7)
+  await registerAdminRoutes(app);
 
   // Start server
   try {

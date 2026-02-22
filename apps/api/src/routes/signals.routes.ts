@@ -10,6 +10,7 @@ import {
 } from "@adaptive/types";
 import * as store from "../store/store.js";
 import * as sseHub from "../realtime/sseHub.js";
+import { getCommunitySignalsForTrip } from "../services/community-signals.service.js";
 
 /**
  * Register signals routes
@@ -40,6 +41,8 @@ export async function registerSignalsRoutes(app: FastifyInstance) {
         // Get transit signals
         const transitSignal = store.getTransitSignals(tripId);
 
+        const communityReports = await getCommunitySignalsForTrip(tripId);
+
         const response = SignalsResponseSchema.parse({
           weather: weatherSignal
             ? {
@@ -54,6 +57,7 @@ export async function registerSignalsRoutes(app: FastifyInstance) {
           transit: transitSignal
             ? { alerts: transitSignal.alerts }
             : undefined,
+          community: { reports: communityReports },
         });
 
         return reply.send(response);

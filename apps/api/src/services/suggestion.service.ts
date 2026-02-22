@@ -10,11 +10,13 @@ import type {
   Suggestion,
   Weights,
   CrowdSignalItem,
+  CommunitySignalReport,
 } from "@adaptive/types";
 import type { WeatherSignalRecord, CrowdSignalRecord, TransitSignalRecord } from "../store/store.js";
 import { buildPlanDiff } from "./diff.service.js";
 import { computeImpact, computeConfidence } from "./impact.service.js";
 import { parseHHMM, formatHHMM } from "../utils/time.js";
+import { haversineKm } from "../utils/geo.js";
 
 /**
  * Recalculate itinerary times after reordering
@@ -467,6 +469,155 @@ export function buildCrowdSuggestion(
     afterPlan: {
       version: 2,
       items: afterPlanItems,
+    },
+    diff,
+  };
+
+  return suggestion;
+}
+
+/**
+ * Build a community-signal-based suggestion.
+ * For Phase 7, this produces a high-priority reorder/shift with strong reasons.
+ */
+export function buildCommunitySuggestion(
+  trip: Trip,
+  activities: Activity[],
+  latestItinerary: Itinerary | undefined,
+  communityReports: CommunitySignalReport[]
+): Suggestion | null {
+  if (!latestItinerary || latestItinerary.items.length === 0 || communityReports.length === 0) {
+    return null;
+  }
+
+  const activeReports = communityReports.filter((report) => new Date(report.expiresAt).getTime() > Date.now());
+  if (activeReports.length === 0) {
+    return null;
+  }
+
+  const lockedIds = new Set(activities.filter((a) => a.locked).map((a) => a.activityId));
+  const affectedActivityIds = new Set<string>();
+  const indoorCandidateIds = new Set<string>();
+  const reasons: string[] = [];
+  let hasTrafficLike = false;
+  let hasCrowdLike = false;
+  let hasTransitLike = false;
+  let hasWeatherLike = false;
+
+  for (const report of activeReports) {
+    const nearActivities = activities.filter((activity) => {
+      const distanceMeters = haversineKm(report.lat, report.lng, activity.place.lat, activity.place.lng) * 1000;
+      return distanceMeters <= 1000;
+    });
+
+    if (nearActivities.length === 0) continue;
+
+    if (report.type === "traffic" || report.type === "closure") {
+      hasTrafficLike = true;
+      reasons.push(`${report.type} reported near planned stops: ${report.message}`);
+      nearActivities.forEach((a) => affectedActivityIds.add(a.activityId));
+    } else if (report.type === "crowds") {
+      hasCrowdLike = true;
+      reasons.push(`crowd report near activities: ${report.message}`);
+      nearActivities.forEach((a) => affectedActivityIds.add(a.activityId));
+    } else if (report.type === "transit") {
+      hasTransitLike = true;
+      reasons.push(`transit disruption report: ${report.message}`);
+      nearActivities.forEach((a) => affectedActivityIds.add(a.activityId));
+    } else if (report.type === "weather") {
+      hasWeatherLike = true;
+      reasons.push(`local weather incident reported: ${report.message}`);
+      nearActivities.forEach((a) => affectedActivityIds.add(a.activityId));
+      activities
+        .filter((a) => a.place.isIndoor === true)
+        .forEach((a) => indoorCandidateIds.add(a.activityId));
+    } else {
+      reasons.push(`community report: ${report.message}`);
+      nearActivities.forEach((a) => affectedActivityIds.add(a.activityId));
+    }
+  }
+
+  if (affectedActivityIds.size === 0) {
+    return null;
+  }
+
+  const afterPlanItems = [...latestItinerary.items];
+  const impacted: ItineraryItem[] = [];
+  const safe: ItineraryItem[] = [];
+
+  for (const item of afterPlanItems) {
+    const isImpacted = affectedActivityIds.has(item.activityId);
+    if (isImpacted && !lockedIds.has(item.activityId)) {
+      impacted.push(item);
+    } else {
+      safe.push(item);
+    }
+  }
+
+  let reordered: ItineraryItem[] = [];
+  if (hasWeatherLike && indoorCandidateIds.size > 0) {
+    const indoorFirst: ItineraryItem[] = [];
+    const rest: ItineraryItem[] = [];
+    for (const item of safe) {
+      if (indoorCandidateIds.has(item.activityId) && !lockedIds.has(item.activityId)) {
+        indoorFirst.push(item);
+      } else {
+        rest.push(item);
+      }
+    }
+    reordered = [...indoorFirst, ...rest, ...impacted];
+    reasons.push("Prioritized indoor stops and deferred impacted outdoor segments.");
+  } else if (hasCrowdLike || hasTransitLike) {
+    reordered = [...impacted, ...safe];
+    reasons.push("Shifted reported high-risk stops to reduce disruption impact.");
+  } else {
+    reordered = [...safe, ...impacted];
+    reasons.push("Moved reported risk-area stops later in the route.");
+  }
+
+  if (reordered.length !== latestItinerary.items.length) {
+    return null;
+  }
+
+  const hasActualChange = reordered.some(
+    (item, idx) => item.activityId !== latestItinerary.items[idx]?.activityId
+  );
+  if (!hasActualChange) {
+    return null;
+  }
+
+  const timed = recalculateItineraryTimes(reordered, trip.startTime);
+  const diff = buildPlanDiff(latestItinerary.items, timed);
+  const impact = computeImpact(latestItinerary.items, timed, "traffic");
+  const confidence = computeConfidence(
+    {
+      weatherWeight: 1,
+      crowdWeight: 1,
+      transitWeight: 1,
+      travelWeight: 1,
+      changeAversion: 1,
+    },
+    hasTrafficLike ? "traffic" : hasTransitLike ? "transit" : hasCrowdLike ? "crowds" : "weather",
+    impact,
+    diff.moved.length + diff.swapped.length
+  );
+
+  const suggestion: Suggestion = {
+    suggestionId: `sug_${nanoid(12)}`,
+    kind: hasCrowdLike || hasTransitLike ? "shift" : "reorder",
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    trigger: hasTrafficLike ? "traffic" : hasTransitLike ? "transit" : hasCrowdLike ? "crowds" : "weather",
+    reasons,
+    confidence,
+    impact,
+    beforePlan: {
+      version: 1,
+      items: latestItinerary.items,
+    },
+    afterPlan: {
+      version: 2,
+      items: timed,
     },
     diff,
   };

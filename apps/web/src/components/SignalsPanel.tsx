@@ -107,10 +107,11 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
     return <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>;
   }
 
-  const { weather, crowds, transit } = signals || {};
+  const { weather, crowds, transit, community } = signals || {};
   const hasWeather = weather && weather.summary && weather.summary !== "No data yet";
   const hasCrowds = crowds && crowds.length > 0;
   const hasTransit = transit && transit.alerts && transit.alerts.length > 0;
+  const hasCommunity = community && community.reports && community.reports.length > 0;
 
   const isLoadingWeather = !pollingStopped && (!weather || !weather.summary || weather.summary === "No data yet");
   const isLoadingCrowds = !pollingStopped && crowds === undefined;
@@ -197,7 +198,33 @@ export default function SignalsPanel({ tripId }: SignalsPanelProps) {
         </div>
       ) : null}
 
-      {!hasWeather && !hasCrowds && !hasTransit && !isLoadingWeather && !isLoadingCrowds && !isLoadingTransit && (
+      {hasCommunity ? (
+        <div className="rounded-xl border border-[#c7d8cc] bg-white/80 p-4">
+          <h3 className="mb-2 text-lg">Community Reports</h3>
+          <div className="space-y-2">
+            {community.reports.map((report) => (
+              <div key={report.id} className="rounded-lg border border-[#d8e6dc] bg-[#f8fcfa] p-2">
+                <p className="text-sm font-semibold text-[#214236]">
+                  {report.type} | severity {report.severity}
+                </p>
+                <p className="text-xs text-[#567165]">{report.message}</p>
+                {report.photoUrl && (
+                  <a
+                    href={report.photoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-block text-xs text-teal-700 underline"
+                  >
+                    View photo
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {!hasWeather && !hasCrowds && !hasTransit && !hasCommunity && !isLoadingWeather && !isLoadingCrowds && !isLoadingTransit && (
         <div className="rounded-xl border border-[#c7d8cc] bg-white/80 p-4 text-sm text-[#576e62]">No signals available yet.</div>
       )}
     </div>

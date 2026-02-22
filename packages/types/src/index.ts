@@ -65,6 +65,8 @@ export type {
   TransitSignal,
   UpsertTransitSignalRequest,
   SignalsResponse,
+  CommunitySignalReport,
+  CommunitySignals,
   UpsertWeatherSignalRequest,
   SuggestionStatus,
   SuggestionKind,

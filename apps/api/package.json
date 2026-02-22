@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts"
+    "start": "tsx src/server.ts",
+    "test:phase7": "node test-phase7.mjs"
   },
   "dependencies": {
     "@adaptive/integrations": "workspace:*",
+    "@adaptive/store": "workspace:*",
     "@adaptive/types": "workspace:*",
     "@fastify/cors": "^8.5.0",
+    "@fastify/multipart": "^8.3.1",
     "dotenv": "^17.3.1",
     "fastify": "^4.25.2",
     "nanoid": "^5.0.4"

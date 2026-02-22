@@ -99,3 +99,40 @@ h4 {
   color: #224132;
   font-weight: 600;
 }
+
+.nav-shell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.8rem 1rem;
+}
+
+.nav-brand {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #173428;
+}
+
+.nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.nav-link {
+  border: 1px solid #c5d6cb;
+  border-radius: 999px;
+  padding: 0.38rem 0.78rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #254438;
+  background: #ffffffd4;
+}
+
+.nav-link:hover {
+  border-color: #0f766e;
+  color: #0f766e;
+}

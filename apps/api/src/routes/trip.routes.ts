@@ -13,8 +13,7 @@ import {
 } from "@adaptive/types";
 import * as store from "../store/store.js";
 import { generateItinerary } from "../services/planner.service.js";
-import { buildWeatherSuggestion, buildCrowdSuggestion, buildTransitSuggestion } from "../services/suggestion.service.js";
-import { emit } from "../realtime/sseHub.js";
+import { recomputeTripSuggestions } from "../services/recompute.service.js";
 
 /**
  * Register trip routes
@@ -167,61 +166,12 @@ export async function registerTripRoutes(app: FastifyInstance) {
         const { tripId } = request.params;
 
         // Get trip data
-        const tripData = store.getTrip(tripId);
-        if (!tripData) {
+        if (!store.getTrip(tripId)) {
           return reply.code(404).send({ error: "Trip not found" });
         }
 
-        const { trip, activities, latestItinerary } = tripData;
-
-        // Get weather signal
-        const weatherSignal = store.getWeatherSignal(tripId);
-        
-        // Get crowd signals
-        const crowdSignal = store.getCrowdSignals(tripId);
-        
-        // Get transit signals
-        const transitSignal = store.getTransitSignals(tripId);
-
-        // Build weather suggestion
-        const weatherSuggestion = buildWeatherSuggestion(
-          trip,
-          activities,
-          latestItinerary?.itinerary,
-          weatherSignal
-        );
-        
-        // Build crowd suggestion
-        const crowdSuggestion = buildCrowdSuggestion(
-          trip,
-          activities,
-          latestItinerary?.itinerary,
-          crowdSignal
-        );
-        
-        // Build transit suggestion
-        const transitSuggestion = buildTransitSuggestion(
-          trip,
-          activities,
-          latestItinerary?.itinerary,
-          transitSignal
-        );
-
-        const suggestions = [weatherSuggestion, crowdSuggestion, transitSuggestion].filter(Boolean);
-
-        if (suggestions.length > 0) {
-          // Store and emit each suggestion
-          for (const suggestion of suggestions) {
-            if (suggestion) {
-              store.addSuggestion(tripId, suggestion);
-              emit(tripId, "suggestion:new", suggestion);
-            }
-          }
-
-          return reply.send({ ok: true, suggestions });
-        }
-
-        return reply.send({ ok: true, suggestions: [] });
+        const suggestions = await recomputeTripSuggestions(tripId);
+        return reply.send({ ok: true, suggestions });
       } catch (error) {
         console.error("Error recomputing suggestions:", error);
         return reply.code(500).send({ error: "Internal server error" });
