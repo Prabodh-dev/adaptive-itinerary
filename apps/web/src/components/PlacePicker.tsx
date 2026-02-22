@@ -160,8 +160,8 @@ export default function PlacePicker({ onAddPlace, defaultLocation }: PlacePicker
 
       {showResults && results.length > 0 && (
         <ul className="absolute z-10 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-[#c4d6ca] bg-white p-1 shadow-xl">
-          {results.map((place) => (
-            <li key={place.providerPlaceId}>
+          {results.map((place, idx) => (
+            <li key={`${place.provider}:${place.providerPlaceId}:${place.lat}:${place.lng}:${idx}`}>
               <button
                 type="button"
                 onClick={() => handleSelectPlace(place)}
