@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getSuggestions, applySuggestion, sendFeedback, type Suggestion, type ListSuggestionsResponse } from "@/api/client";
+import { applySuggestion, getSuggestions, sendFeedback, type Suggestion } from "@/api/client";
 import DiffView from "./DiffView";
 
 interface SuggestionCardProps {
@@ -54,50 +54,34 @@ export default function SuggestionCard({ tripId, onSuggestionApplied }: Suggesti
   }
 
   if (loading) {
-    return (
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <p className="text-sm text-gray-500">Loading suggestions...</p>
-      </div>
-    );
+    return <p className="text-sm text-[#5a7063]">Loading suggestions...</p>;
   }
 
   if (error) {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-        <p className="text-sm text-red-600">{error}</p>
-      </div>
-    );
+    return <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>;
   }
 
   if (suggestions.length === 0) {
-    return (
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <p className="text-sm text-gray-500">No suggestions available yet.</p>
-      </div>
-    );
+    return <p className="text-sm text-[#5a7063]">No suggestions available yet.</p>;
   }
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Suggestions</h3>
+    <div className="space-y-3">
       {suggestions.map((suggestion) => (
-        <div
-          key={suggestion.suggestionId}
-          className="rounded-lg border border-amber-200 bg-amber-50 p-4"
-        >
-          <div className="mb-2 flex items-center justify-between">
-            <span className="rounded bg-amber-200 px-2 py-1 text-xs font-medium text-amber-800">
-              {suggestion.kind.toUpperCase()}
+        <div key={suggestion.suggestionId} className="rounded-xl border border-[#c7d8cc] bg-white/80 p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="rounded bg-[#dff4ec] px-2 py-1 text-xs font-semibold uppercase tracking-wide text-[#205843]">
+              {suggestion.kind}
             </span>
             {suggestion.trigger && (
-              <span className="rounded bg-gray-200 px-2 py-1 text-xs font-medium text-gray-600">
+              <span className="rounded bg-[#edf3ef] px-2 py-1 text-xs font-semibold text-[#4b6054]">
                 Trigger: {suggestion.trigger}
               </span>
             )}
           </div>
 
           {suggestion.reasons && suggestion.reasons.length > 0 && (
-            <ul className="mb-3 list-inside list-disc text-sm text-gray-700">
+            <ul className="mb-3 list-inside list-disc text-sm text-[#42594d]">
               {suggestion.reasons.map((reason, idx) => (
                 <li key={idx}>{reason}</li>
               ))}
@@ -106,17 +90,17 @@ export default function SuggestionCard({ tripId, onSuggestionApplied }: Suggesti
 
           <DiffView suggestion={suggestion} />
 
-          <div className="mt-4 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <button
               onClick={() => handleAccept(suggestion.suggestionId)}
               disabled={applying === suggestion.suggestionId}
-              className="rounded bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+              className="btn-brand px-3 py-1.5 text-sm"
             >
               {applying === suggestion.suggestionId ? "Applying..." : "Accept"}
             </button>
             <button
               onClick={() => handleDismiss(suggestion.suggestionId)}
-              className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="btn-subtle px-3 py-1.5 text-sm text-[#2f4b3d]"
             >
               Dismiss
             </button>

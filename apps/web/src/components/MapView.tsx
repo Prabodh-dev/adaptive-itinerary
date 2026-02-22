@@ -71,11 +71,11 @@ export default function MapView({ activities, accessToken }: MapViewProps) {
 
   if (!accessToken) {
     return (
-      <div className="flex h-64 w-full items-center justify-center rounded border border-gray-200 bg-gray-50 text-gray-500 text-sm text-center p-4">
+      <div className="flex h-72 w-full items-center justify-center rounded-xl border border-[#c7d8cc] bg-[#f7fbf8] p-4 text-center text-sm text-[#5a7064]">
         Mapbox token not configured. Set NEXT_PUBLIC_MAPBOX_TOKEN in .env.local to enable map.
       </div>
     );
   }
 
-  return <div ref={mapContainer} className="h-64 w-full rounded border border-gray-200" />;
+  return <div ref={mapContainer} className="h-72 w-full overflow-hidden rounded-xl border border-[#c7d8cc]" />;
 }

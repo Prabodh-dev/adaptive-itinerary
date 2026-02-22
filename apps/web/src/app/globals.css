@@ -1,1 +1,101 @@
 @import "tailwindcss";
+
+:root {
+  --bg-base: #f4f6ef;
+  --bg-strong: #e6ece0;
+  --surface: #ffffffcc;
+  --surface-strong: #ffffff;
+  --text-main: #11231a;
+  --text-muted: #526256;
+  --brand: #0f766e;
+  --brand-soft: #ccfbf1;
+  --accent: #ea580c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  color: var(--text-main);
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at 10% 0%, #dbefe7 0%, transparent 30%),
+    radial-gradient(circle at 90% 10%, #ffe7d3 0%, transparent 24%),
+    linear-gradient(180deg, var(--bg-strong), var(--bg-base));
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display), Georgia, serif;
+  letter-spacing: 0.01em;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 1.25rem;
+}
+
+.glass-card {
+  border: 1px solid #cfe0d5;
+  border-radius: 1rem;
+  background: var(--surface);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 30px #113b2014;
+}
+
+.field-label {
+  margin-bottom: 0.4rem;
+  display: block;
+  font-size: 0.79rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #3a5244;
+}
+
+.field-control {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid #bfd3c5;
+  background: #ffffffcc;
+  padding: 0.62rem 0.82rem;
+  font-size: 0.92rem;
+  color: #153226;
+  outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.field-control:focus {
+  border-color: #17817a;
+  box-shadow: 0 0 0 3px #99f6e4aa;
+}
+
+.btn-brand {
+  border-radius: 0.8rem;
+  background: linear-gradient(135deg, #0f766e, #0e9f6e);
+  color: white;
+  font-weight: 700;
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+  box-shadow: 0 8px 20px #0f766e33;
+}
+
+.btn-brand:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px #0f766e55;
+}
+
+.btn-brand:disabled {
+  opacity: 0.6;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-subtle {
+  border-radius: 0.7rem;
+  border: 1px solid #c6d6cc;
+  background: #ffffffd9;
+  color: #224132;
+  font-weight: 600;
+}
